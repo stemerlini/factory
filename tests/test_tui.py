@@ -86,6 +86,39 @@ async def test_gate_items_do_themselves(make, monkeypatch):
         assert "## Options" in opened[0].read_text()
 
 
+async def test_agent_pane_asks_and_remembers(make):
+    import sys
+    from pathlib import Path
+
+    from factory import config, live
+    from factory.tui.agentpane import AgentPane, Question
+
+    config.save({"agent": {"default": "fake"}, "agents": {"fake": {
+        "command": [sys.executable, str(Path(__file__).parent / "fake_acp.py")]}}})
+    p = make()
+    app = FactoryApp(p.root)
+
+    async def until(state):
+        for _ in range(200):
+            await pilot.pause(0.02)
+            if app.lives[""].state == state:
+                return
+
+    async with app.run_test(size=(150, 44)) as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await until(live.ASKING)
+        assert app.query_one("#drawer", AgentPane).display
+        assert isinstance(app.focused, Question)
+        await pilot.press("s")  # always allow pytest this session
+        await until(live.READY)
+        await pilot.press(*"go on", "enter")
+        await pilot.pause(0.3)
+        await until(live.READY)
+        said = [e.text for e in app.lives[""].entries if e.kind == "agent"]
+        assert said[-1] == said[-3] == "reject-once allow-once allow-once allow-once"
+
+
 def test_editor_command_splits_flags(monkeypatch, tmp_path):
     from factory.tui.app import editor_command
 
@@ -153,7 +186,7 @@ async def test_agent_dialog_continues_last_session(make, monkeypatch):
     monkeypatch.setattr(app, "launch", launched.append)
     async with app.run_test(size=(150, 44)) as pilot:
         await pilot.pause()
-        await pilot.press("a")
+        await pilot.press("A")
         await pilot.pause()
         assert isinstance(app.screen, AgentScreen)
         await pilot.click("#continue")

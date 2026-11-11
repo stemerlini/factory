@@ -38,6 +38,7 @@ class Project:
     toolchains: dict[str, str] = field(default_factory=dict)
     store_root: Path = DEFAULT_STORE
     vault_folder: str = ""  # folder inside the Obsidian vault; default Projects/<name>
+    agent: str = ""  # the agent this project works with ([agent] default), else the user's
 
     # --- loading ---------------------------------------------------------------------------
 
@@ -60,6 +61,7 @@ class Project:
             toolchains=dict(data.get("toolchains", {})),
             store_root=Path(store).expanduser() if store else DEFAULT_STORE,
             vault_folder=data.get("obsidian", {}).get("folder", ""),
+            agent=data.get("agent", {}).get("default", ""),
         )
 
     @property
@@ -288,7 +290,7 @@ def create(target: Path, template: str = "hardware", name: str | None = None,
     (target / ".gitignore").write_text(".factory/\n__pycache__/\n")
     from . import agent
 
-    for rel, text in ((".claude/settings.json", agent.SETTINGS), ("CLAUDE.md", agent.CLAUDE_MD)):
+    for rel, text in agent.GUARDRAILS:
         (target / rel).parent.mkdir(parents=True, exist_ok=True)
         (target / rel).write_text(text)
 

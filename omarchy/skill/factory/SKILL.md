@@ -85,6 +85,9 @@ Everything you create is a **draft** (`status: draft`).
   step, recent events) and `factory gates <element>`; the first gate that is not done is
   the work in front of you; its checklist says what is left. `factory journal --since 7`
   shows what happened lately.
+- **In Factory's agent pane** Factory answers your permission requests: reads and edits
+  inside the project pass, commands are asked, and committing, locking and deciding are
+  refused. Don't retry a refused command another way; say what the user should do.
 - **Playbooks.** When your brief names a gate, follow its playbook. A project can
   override one in `playbooks/<gate>.md`.
 - **Change** files per FORMATS.md, then `factory check`. A changed input makes its

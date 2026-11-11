@@ -416,6 +416,12 @@ def cmd_agent(args):
     os.execvp(argv[0], argv)
 
 
+def cmd_skill(args):
+    made = agent.install_skill()
+    out(args, {"linked": [str(m) for m in made], "skill": str(agent.SKILL)},
+        "\n".join(f"Linked {m}" for m in made) or "The factory skill is already installed")
+
+
 def event_dict(e: journal.Event) -> dict:
     return {"time": e.time, "kind": e.kind, "title": e.title, "element": e.element,
             "detail": e.detail}
@@ -567,6 +573,8 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("-m", "--message", help="commit message (default: the proposal title)")
     p = add("reject", cmd_reject, "discard pending changes to these files")
     p.add_argument("paths", nargs="+")
+    p = add("skill", cmd_skill, "install the factory skill for Claude Code, Copilot and others")
+    p.add_argument("action", choices=("install",))
     p = add("agent", cmd_agent, "start a Claude Code session on an element")
     p.add_argument("element", nargs="?", help="element path (default: the system)")
     p.add_argument("-t", "--task", help="what to work on (default: summarise and propose)")

@@ -89,6 +89,10 @@ Screen {
 
 #tabs {
     width: 1fr;
+    height: 1fr;
+}
+#tabs > ContentSwitcher, #tabs TabPane {
+    height: 1fr;
 }
 DataTable {
     height: 1fr;
@@ -213,4 +217,37 @@ ModalScreen {
 }
 #journey, #recent {
     padding: 0 1;
+}
+
+/* --- agent pane: the Agent tab and the drawer ------------------------------------------- */
+AgentPane {
+    height: 1fr;
+}
+#drawer {
+    display: none;
+    width: 64;
+    border-left: solid $primary 40%;
+}
+.agent-head {
+    height: 1;
+    padding: 0 1;
+    background: $boost;
+}
+.agent-scroll {
+    height: 1fr;
+    padding: 0 1;
+}
+.agent-question {
+    display: none;
+    height: auto;
+    padding: 0 1;
+    border: tall $accent;
+    background: $boost;
+}
+.agent-question:focus {
+    border: tall $accent;
+    background: $accent 15%;
+}
+.agent-input {
+    margin: 0 0;
 }

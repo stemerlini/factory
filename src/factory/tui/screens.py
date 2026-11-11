@@ -341,7 +341,7 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 
 | Key | |
 |---|---|
-| `1`…`9`, `0` | tabs: Home, Gates, Requirements, Architecture, Studies, Results… |
+| `1`…`9`, `0` | tabs: Home, Gates, Requirements, Architecture, Studies, … Journal, Agent |
 | `enter` | on Home: go to what waits on you, or to an element's next step |
 | `space` | on a Gates item: do it (open the file, dialog or tab it needs) |
 | `a` | on a Gates item: hand that gate to an agent, with its playbook |
@@ -353,7 +353,10 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 | `d` | decompose the selected block into a subsystem (Architecture tab) |
 | `L` | lock the element (needs a commit and proven analysis) |
 | `c` | cancel the selected run |
-| `a` | agent: go to the running session, continue the last one, or start one here |
+| `a` | agent: start (or show) this element's agent in the pane, briefed on it |
+| `ctrl+a` | show, focus or hide the agent pane; `esc` in it stops the agent |
+| `y` / `n` / `s` | when the agent asks: allow / deny / always allow that command this session |
+| `A` | Claude Code in its own terminal window instead (continue, fork, new) |
 | `8` | Review: the agent's proposal, its changes (diff) and open decisions |
 | `9` | Journal: approvals, locks, decisions, runs and gates passed, newest first |
 | `y` / `x` | approve (commit) / discard pending changes (Review tab) |

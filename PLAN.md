@@ -349,11 +349,12 @@ handover or weekly note that can go to the Obsidian vault.
 - Every visual change is checked against the theme with offscreen screenshots.
 
 ### Build order
-1. **Journal + Home**: the data layer everything else reads.
+1. ✓ **Journal + Home**: the data layer everything else reads.
    `factory home --json`, `factory next`.
-2. **Guided gates**: checklists, playbooks, `space` / `a` on each item.
-3. **ACP client + Agent pane + guardrails**: Copilot first, then the adapters;
-   `AGENTS.md`; the generic skill.
+2. ✓ **Guided gates**: checklists, playbooks, `space` / `a` on each item.
+3. ✓ **ACP client + Agent pane + guardrails**: `acp.py` (client and policy), `live.py`
+   (one session per element, resumed with `session/load`), the pane as drawer and tab;
+   `AGENTS.md`; `factory skill install`. Tried against Copilot and the Claude adapter.
 4. **Kickoff.**
 5. **Fun & layout**: celebrations, journey, tab regroup, command palette.
 

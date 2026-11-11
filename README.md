@@ -70,10 +70,40 @@ before you create it.
 
 ## Working with an agent
 
-Press `a` in the TUI: start a Claude Code session on the selected element, go to the one
-already running (the top bar shows `◆ agent working`), or continue the last one after a
-usage limit resets. The agent never commits: its changes wait in the Review tab (`8`) with
-`.factory/proposal.md`, which is also its handover to the next session.
+The agent works inside Factory. Press `a` and the selected element's agent starts in the
+**agent pane**, briefed on the element (on a Gates item: on that gate, with its playbook).
+The pane is a drawer beside any tab (`Ctrl+A` shows, focuses and hides it) and the
+**Agent** tab (`0`). Each element keeps its own conversation; reopen Factory and `a` picks
+it up where it was.
+
+Any agent that speaks the [Agent Client Protocol](https://agentclientprotocol.com) works:
+
+| Agent | `[agent] default` | Started with |
+|---|---|---|
+| Claude Code (default) | `claude` | `claude-agent-acp`, else `npx -y @agentclientprotocol/claude-agent-acp` |
+| GitHub Copilot | `copilot` | `copilot --acp` |
+| opencode | `opencode` | `opencode acp` |
+| Codex | `codex` | `codex-acp`, else `npx -y @zed-industries/codex-acp` |
+
+Pick yours in `~/.config/factory/config.toml`, or per project in `factory.toml`:
+
+```toml
+[agent]
+default = "copilot"
+
+[agents.mine]            # any other ACP agent
+command = ["my-agent", "--acp"]
+```
+
+Factory answers the agent's permission requests itself. Reading and editing inside the
+project are allowed; commands and anything outside the project are asked in the pane
+(`y` allow, `n` deny, `s` always allow that command this session). Committing, pushing,
+resetting, tagging, locking and deciding are always refused: the agent's changes wait in
+the Review tab (`8`) with `.factory/proposal.md`, its handover to the next session. Every
+project carries `AGENTS.md` (and `CLAUDE.md`, which imports it) with these rules, and
+`factory skill install` gives Claude Code, Copilot and others the `factory` skill.
+
+`A` opens Claude Code in its own terminal window instead, as before:
 
 ```bash
 factory agent fee -t "size the ADC"   # new session (-w: own window)

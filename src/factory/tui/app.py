@@ -20,6 +20,7 @@ from textual.widgets import (
     DataTable,
     DirectoryTree,
     Footer,
+    Input,
     Label,
     Log,
     Markdown,
@@ -39,6 +40,7 @@ from .. import (
     guide,
     home,
     journal,
+    live,
     pipeline,
     review,
     runs,
@@ -49,6 +51,7 @@ from ..model import Element
 from ..modules import registry
 from ..project import Project, ProjectError
 from . import logo
+from .agentpane import AgentPane, Question
 from .screens import (
     AgentScreen,
     ApproveScreen,
@@ -84,9 +87,10 @@ GATE_STYLE = {
 RUN_STYLE = {"done": "green", "failed": "red", "running": "cyan", "queued": "cyan",
              "cancelled": "yellow"}
 TABS = ("home", "gates", "requirements", "architecture", "studies", "results", "files",
-        "review", "journal", "modules")
+        "review", "journal", "agent")
 WAITING_MARK = {"review": ("●", "magenta"), "decision": ("?", "yellow"), "failed": ("✗", "red"),
-                "stale": ("●", "yellow"), "unlocked": ("◆", "red"), "problem": ("!", "red")}
+                "stale": ("●", "yellow"), "unlocked": ("◆", "red"), "problem": ("!", "red"),
+                "agent": ("?", "bold magenta")}
 JOURNAL_STYLE = {"approve": "green", "lock": "magenta", "decision": "yellow", "decided": "green",
                  "run": "cyan", "failed": "red", "agent": "blue", "reject": "yellow",
                  "gate": "bold yellow"}
@@ -122,6 +126,8 @@ class FactoryApp(App):
         *(Binding(str(i % 10), f"tab('{t}')", t.title(), show=False)
           for i, t in enumerate(TABS, 1)),
         Binding("a", "agent", "Agent"),
+        Binding("A", "agent_window", "Agent window", show=False),
+        Binding("ctrl+a", "drawer", "Agent pane", priority=True),
         Binding("y", "approve", "Approve", show=False),
         Binding("x", "reject", "Reject", show=False),
         Binding("space", "do_item", "Do it", show=False),
@@ -146,6 +152,9 @@ class FactoryApp(App):
         self.home = home.Home()
         self.checks: dict[str, dict[str, list[guide.Check]]] = {}
         self._checks_shown: str | None = None
+        self.lives: dict[str, live.Live] = {}
+        self._agent_dirty = False
+        self._agent_states: dict[str, str] = {}
 
     # --- layout ----------------------------------------------------------------------------
 
@@ -213,8 +222,11 @@ class FactoryApp(App):
                     with TabPane("Journal", id="journal"):
                         yield DataTable(id="journal-table", cursor_type="row",
                                         zebra_stripes=True)
+                    with TabPane("Agent", id="agent"):
+                        yield AgentPane(id="agent-tab")
                     with TabPane("Modules", id="modules"):
                         yield DataTable(id="module-table", cursor_type="row")
+            yield AgentPane(id="drawer")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -247,6 +259,7 @@ class FactoryApp(App):
         else:
             self.action_pick_project()
         self.set_interval(2.0, self.tick)
+        self.set_interval(0.15, self.agent_tick)
 
     # --- project and element ----------------------------------------------------------------
 
@@ -257,6 +270,10 @@ class FactoryApp(App):
             self.notify(str(e), severity="error")
             return
         config.remember(self.project.root)
+        if any(lv.project.root != self.project.root for lv in self.lives.values()):
+            for lv in self.lives.values():
+                self.run_worker(lv.close(), group="agent")
+            self.lives.clear()
         self.title = f"Factory · {self.project.name}"
         self.element_path = ""
         self.rebuild_tree()
@@ -314,6 +331,7 @@ class FactoryApp(App):
     def refresh_element(self) -> None:
         if not self.element:
             return
+        self.refresh_agent()
         self.refresh_trace_summary()
         self.refresh_gate_bar()
         self.refresh_gates()
@@ -360,7 +378,10 @@ class FactoryApp(App):
         active = [s for s in self.states.values() if s.status == pipeline.RUNNING]
         text = (Text(f"⟳ {len(active)} running: " + ", ".join(s.study.key for s in active), "cyan")
                 if active else Text(f"v{__version__}", "dim"))
-        if self._agent_live:
+        states = {lv.state for lv in self.lives.values()}
+        if live.ASKING in states:
+            text = Text.assemble(("? agent asks you", "bold magenta"), "  ", text)
+        elif self._agent_live or live.WORKING in states:
             text = Text.assemble(("◆ agent working", "bold magenta"), "  ", text)
         self.query_one("#activity", Static).update(text)
 
@@ -427,6 +448,9 @@ class FactoryApp(App):
     def refresh_home(self) -> None:
         h = home.build(self.project, list(self.elements.values()), self.states,
                        self.gate_states, checks=self.checks)
+        h.waiting[:0] = [home.Item("agent", f"{lv.title} asks to "
+                                   f"{lv.asking.command or lv.asking.entry.text}", path)
+                         for path, lv in self.lives.items() if lv.asking]
         self.home = h
         width = 30
         filled = round(h.progress * width)
@@ -502,7 +526,9 @@ class FactoryApp(App):
         item = self.home.waiting[int(event.row_key.value)]
         if item.element in self.elements:
             self.select_element(item.element)
-        if item.kind == "review":
+        if item.kind == "agent":
+            self.show_agent()
+        elif item.kind == "review":
             self.action_tab("review")
         elif item.kind == "decision":
             self.decide(item.target)
@@ -1110,7 +1136,147 @@ class FactoryApp(App):
         self.push_screen(ConfirmScreen(f"Discard the change to {path}? This cannot be undone."),
                          go)
 
+    # --- the agent pane ----------------------------------------------------------------------
+
     def action_agent(self) -> None:
+        """Start the selected element's agent in the pane, briefed on the element (or on the
+        gate under the cursor); if it already runs, show it, and hand it the gate if picked."""
+        if not self.project or not self.element:
+            return
+        p, e = self.project, self.element
+        picked = self.selected_check()
+        gate = picked[0] if picked else None
+        session = self.lives.get(e.path)
+        if session and session.state not in (live.FAILED, live.STOPPED):
+            if gate and session.state == live.READY:
+                self.run_worker(session.send(agent.brief(p, e, "", gate)), group="agent")
+            self.show_agent()
+            return
+        written = agent.ensure_files(p)
+        if written:
+            self.notify(f"Added agent guardrails: {', '.join(written)} (review them)")
+        session = self.lives[e.path] = live.Live(p, e.path, live.default_name(p),
+                                                 self.agent_changed)
+        what = f"{e.title}: {dict(GATES_ORDER)[gate]}" if gate else e.title
+        journal.record(p, "agent", f"{session.title} on {what}", e.path)
+        self.show_agent()
+
+        async def run() -> None:
+            await session.start()
+            if session.state == live.READY and (gate or not session.resumed):
+                await session.send(agent.brief(p, e, "", gate))
+
+        self.run_worker(run(), group="agent")
+
+    def agent_changed(self, session: live.Live) -> None:
+        """Called by a session on every update: mark the panes for the next redraw, and say
+        at once when the agent asks something."""
+        self._agent_dirty = True
+        before = self._agent_states.get(session.element)
+        self._agent_states[session.element] = session.state
+        if session.state != before:
+            title = self.elements[session.element].title if (
+                session.element in self.elements) else session.element
+            if session.state == live.ASKING:
+                self.notify(f"{session.title} on {title} asks you something", title="? Agent")
+                if session.element == self.element_path:
+                    self.show_agent()
+                    self.call_after_refresh(self.focus_question)
+            elif session.state == live.READY and before == live.WORKING:
+                self.notify(f"{session.title} on {title} is waiting for you", timeout=4)
+            self.refresh_topbar()
+            self.refresh_home()
+
+    def agent_tick(self) -> None:
+        if self._agent_dirty:
+            self._agent_dirty = False
+            self.refresh_agent()
+
+    def panes(self) -> list[AgentPane]:
+        shown = [self.query_one("#drawer", AgentPane)] if self.drawer_open else []
+        if self.query_one("#tabs", TabbedContent).active == "agent":
+            shown.append(self.query_one("#agent-tab", AgentPane))
+        return shown
+
+    @property
+    def drawer_open(self) -> bool:
+        return self.query_one("#drawer", AgentPane).display
+
+    def refresh_agent(self) -> None:
+        if not self.element:
+            return
+        for pane in self.panes():
+            pane.show(self.lives.get(self.element_path), self.element.title)
+
+    def show_agent(self) -> None:
+        """Bring the agent into view: the Agent tab if it is open, else the drawer."""
+        if self.query_one("#tabs", TabbedContent).active != "agent":
+            self.query_one("#drawer", AgentPane).display = True
+        self.refresh_agent()
+        session = self.lives.get(self.element_path)
+        if session and session.asking:
+            self.call_after_refresh(self.focus_question)
+        else:
+            self.call_after_refresh(self.focus_prompt)
+
+    def focus_prompt(self) -> None:
+        for pane in self.panes()[-1:]:
+            pane.query_one(Input).focus()
+
+    def focus_question(self) -> None:
+        for pane in self.panes():
+            question = pane.query_one(Question)
+            if question.display:
+                question.focus()
+                return
+
+    @on(TabbedContent.TabActivated, "#tabs")
+    def tab_changed(self, event: TabbedContent.TabActivated) -> None:
+        if event.pane.id == "agent":
+            self.query_one("#drawer", AgentPane).display = False
+            self.refresh_agent()
+
+    def action_drawer(self) -> None:
+        drawer = self.query_one("#drawer", AgentPane)
+        if drawer.display and drawer.has_focus_within:
+            drawer.display = False
+            self.query_one("#elements", Tree).focus()
+        elif drawer.display:
+            self.call_after_refresh(self.focus_prompt)
+        else:
+            self.show_agent()
+
+    @on(AgentPane.Send)
+    def agent_send(self, event: AgentPane.Send) -> None:
+        session = self.lives.get(self.element_path)
+        if session and session.state == live.READY:
+            self.run_worker(session.send(event.text), group="agent")
+        elif session:
+            self.notify(f"{session.title} is {session.state}; wait for its turn to end",
+                        severity="warning")
+
+    @on(AgentPane.Stop)
+    def agent_stop(self) -> None:
+        session = self.lives.get(self.element_path)
+        if session and session.state in (live.WORKING, live.ASKING):
+            self.run_worker(session.cancel(), group="agent")
+            self.notify("Stopping the agent")
+        else:
+            self.query_one("#elements", Tree).focus()
+
+    @on(Question.Answered)
+    def agent_answer(self, event: Question.Answered) -> None:
+        session = self.lives.get(self.element_path)
+        if session:
+            session.answer(event.choice)
+            self.call_after_refresh(self.focus_prompt)
+
+    async def on_unmount(self) -> None:
+        for session in self.lives.values():
+            await session.close()
+
+    def action_agent_window(self) -> None:
+        """Claude Code in its own terminal window, as before the pane."""
         if not self.project or not self.element:
             return
         if not shutil.which("claude"):

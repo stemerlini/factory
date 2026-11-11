@@ -192,18 +192,53 @@ SETTINGS = """{
   }
 }
 """
-CLAUDE_MD = """# Factory project
+AGENTS_MD = """# Factory project
 
-This folder is a Factory project. Load the `factory` skill before changing anything here.
-The user reviews and approves your work in Factory's Review tab; committing, locking and
-deciding are theirs.
+This folder is a Factory project: one product as a tree of elements (system, subsystems,
+components), each taken through the gates Describe, Research, Architect, Concept, Analyse,
+Lock, Design and Deliver. Load the `factory` skill before changing anything here (install it
+with `factory skill install`). `factory home` says where things stand, `factory gates` what
+each gate still needs.
+
+- Work in the files. The user reviews and approves every change in Factory's Review tab.
+- Never commit, push, reset, checkout, restore, tag or rebase, and never run `factory lock`,
+  `decide`, `approve` or `reject`: those are the user's.
+- A trade-off that is the user's to make becomes a question (`factory ask`), not a guess.
+- Before you stop, write what you did and what comes next in `.factory/proposal.md`.
 """
+# Claude Code reads CLAUDE.md, and imports AGENTS.md from it; the other agents read AGENTS.md.
+CLAUDE_MD = "@AGENTS.md\n"
+GUARDRAILS = ((".claude/settings.json", SETTINGS), ("AGENTS.md", AGENTS_MD),
+              ("CLAUDE.md", CLAUDE_MD))
+SKILL = Path(__file__).resolve().parents[2] / "omarchy/skill/factory"
+SKILL_HOMES = ("~/.claude/skills", "~/.copilot/skills", "~/.agents/skills")
+
+
+def install_skill() -> list[Path]:
+    """Link the factory skill into every agent's skill folder that exists (Claude Code,
+    Copilot, and the shared ~/.agents used by opencode and others). Returns the links made."""
+    made = []
+    for home in SKILL_HOMES:
+        folder = Path(home).expanduser()
+        if not folder.parent.is_dir():
+            continue
+        link = folder / "factory"
+        if link.is_symlink() and link.resolve() == SKILL:
+            continue
+        folder.mkdir(exist_ok=True)
+        if link.is_symlink():
+            link.unlink()
+        elif link.exists():
+            continue  # the user's own; leave it
+        link.symlink_to(SKILL)
+        made.append(link)
+    return made
 
 
 def ensure_files(project: Project) -> list[str]:
     """Write the agent guardrails if a project lacks them. Returns the files written."""
     written = []
-    for rel, text in ((".claude/settings.json", SETTINGS), ("CLAUDE.md", CLAUDE_MD)):
+    for rel, text in GUARDRAILS:
         path = project.root / rel
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)

@@ -21,7 +21,7 @@ def test_new_projects_carry_guardrails(make):
     settings = json.loads((p.root / ".claude/settings.json").read_text())
     deny = settings["permissions"]["deny"]
     assert "Bash(git commit *)" in deny and "Bash(factory decide *)" in deny
-    assert "factory" in (p.root / "CLAUDE.md").read_text()
+    assert "factory lock" in (p.root / "AGENTS.md").read_text()
     (p.root / "CLAUDE.md").unlink()
     assert agent.ensure_files(p) == ["CLAUDE.md"]
 
