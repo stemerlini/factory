@@ -8,24 +8,31 @@ from rich.text import Text
 
 PALETTE = {
     "S": "#8FA3BF",  # steel walls
-    "L": "#D7E0EC",  # lit roof edge
+    "L": "#D7E0EC",  # lit steel: roof edges, chimney rims and bands
     "d": "#5E7290",  # steel in shadow
     "R": "#C8472B",  # brick chimney
+    "r": "#8E2F1D",  # brick in shadow
     "O": "#FF7A1A",  # glowing window
     "Y": "#FFD23F",  # glazed roof teeth
     "s": "#B9B4C8",  # smoke
+    "m": "#8C86A3",  # smoke in shadow
     "K": "#141414",  # door
 }
 
+# The banner's factory redrawn for the top bar: 24 x 12 pixels, six terminal rows.
 FACTORY = """
-..s.......s.....
-.s.s.....s.s....
-..RR......RR....
-..RR......RR....
-YLRRYL..YLRRYL..
-YSLLYSLLYSLLYSLL
-SOOSOOSKKSOOSOOS
-dddddddddddddddd
+..ssssm...ssssm.........
+.sssmm...sssmm..........
+.SSSSd...SSSSd..........
+..RRr.....RRr...........
+..LLd.....LLd...........
+..RRr.....RRr...........
+..RRr.....RRr...........
+YLLLd...YLLLd...YLL.....
+YOSLLL..YOSLLL..YOSLLL..
+YOSSSSLLYOSSKKLLYOSSSSLL
+YSSOOSOSYSSSKKSSYSSOOSOS
+ddddddddddddKKdddddddddd
 """
 
 def sprite(art: str = FACTORY) -> list[str]:
