@@ -5,28 +5,28 @@ Screen {
 /* -- top bar -------------------------------------------------------------- */
 
 #topbar {
-    height: 6;
+    height: 4;
     background: $panel;
     padding: 0 2;
 }
 #brand-logo {
-    width: 26;
+    width: 17;
     padding: 0 2 0 0;
 }
 #brand {
     width: 28;
-    padding: 2 0 0 0;
+    padding: 1 0 0 0;
 }
 #brand-name {
     color: $primary;
 }
 #project-line {
     width: 1fr;
-    padding: 2 0 0 0;
+    padding: 1 0 0 0;
 }
 #activity {
     width: auto;
-    padding: 2 0 0 0;
+    padding: 1 0 0 0;
 }
 
 /* -- body ----------------------------------------------------------------- */
