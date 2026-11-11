@@ -1,4 +1,4 @@
-# Factory — plan (working name)
+# Factory — plan
 
 > A universal workbench for developing anything — a particle telescope, a plasma
 > thruster, a circuit board, a piece of software. One loop, applied at every level:
@@ -248,6 +248,113 @@ Factory is agent-first, and the human stays the engineer of record.
   written at the first change, with a `## Where I stopped` section kept current. A new
   session's brief tells it to read the proposal first.
 
+## Workflow assistant (proposed 2026-11-11, for review)
+
+Factory knows the state of every element, so it can say what comes next, prepare
+the work for an agent, and keep the story of the project. The aim: open Factory
+and know in five seconds what needs you, what the agents are doing, and what to
+do next. Do it with one key, and enjoy watching the factory fill up.
+
+### Home: "what now?"
+A new first tab (`1`; the other tabs shift along) for the whole project, not one element:
+- **Waiting on you:** changes to review, open decisions, agents that finished a turn
+  or are asking permission, stale studies. Each line has an action on Enter.
+- **Agents:** every session, showing the agent, element, task, state
+  (working / waiting / done), and its last line.
+- **Next steps:** each element's current gate and the first unticked item on its checklist.
+- **Journey:** one row per element with eight gate cells
+  (`■■■■◐□□□`), plus the project's progress as a percentage.
+- **Recently:** the latest entries from the journal.
+
+### Guided gates
+Each gate becomes a short **checklist** computed from disk (as gates are today, item by
+item rather than one line). For example, Describe has: description written,
+needs listed, requirements with a verification method, every requirement traced
+to a need. Every item has two ways forward:
+- `space`: **do it yourself.** Factory opens the right file or dialog: the editor on
+  `element.md`, a new requirement, a new study, decompose.
+- `a`: **hand it to an agent.** Factory starts a session with a prepared brief: the element,
+  the gate, the open items, accepted decisions, and the gate's **playbook**.
+  Playbooks are short Markdown recipes per gate (`src/factory/playbooks/<gate>.md`),
+  with project overrides in `.factory/playbooks/`, so how to run the Analyse gate
+  of a hardware project is written once and improved over time.
+
+### Pluggable agents with an integrated agent pane
+Factory becomes an **Agent Client Protocol (ACP) client**. ACP is JSON-RPC over stdio, so
+one client works with any agent that speaks it:
+
+| Agent | Command |
+|---|---|
+| Copilot CLI | `copilot --acp` (native) |
+| opencode | `opencode acp` (native) |
+| Claude Code | `claude-code-acp` (Zed's adapter, npm `@zed-industries/claude-code-acp`) |
+| Codex | `codex-acp` (Zed's adapter, npm `@zed-industries/codex-acp`) |
+
+- Agents are listed in the config: a name, a command, and an optional default model.
+  `factory.toml [agent] default = "copilot"` picks one per project. `a` lets you choose.
+- **The Agent pane** (a tab, and a drawer that toggles from any tab) shows the
+  conversation streaming in: messages, the agent's plan, tool calls with the files
+  they touch, and a prompt box. Sessions are listed per element and can be resumed (ACP
+  `session/load`, where the agent supports it).
+- **Guardrails that don't depend on the agent:** Factory answers the agent's permission
+  requests itself:
+  - Reads, and edits inside the project, are allowed.
+  - Shell commands are asked in the pane (with an "always for this session" option).
+  - `git commit/push/reset/…` and `factory lock/decide/approve/reject` are always denied.
+
+  Review stays the real gate: nothing reaches history unless you approve it.
+- **Open in its own window** remains available for any agent's full terminal UI, as `a`
+  does today with Claude Code.
+- **Agent instructions:** projects carry `AGENTS.md`, which Copilot, Codex and opencode
+  read; `CLAUDE.md` points to it. The `factory` skill is installed for Copilot and Claude.
+
+### Kickoff
+The New Project dialog gets **"Describe your idea"**, a few free-text lines. After
+creating the project, Factory starts the default agent with the kickoff playbook. The
+agent:
+1. interviews you in the pane;
+2. writes the system description and needs;
+3. drafts requirements and a first architecture;
+4. records each real trade-off as a decision;
+5. proposes the first subsystems.
+
+Everything lands in Review as one proposal. You approve, and the journey starts at
+Describe ✓.
+
+### Journal
+The project's story on one timeline, read from:
+- git (approvals, locks, decompositions)
+- decisions (asked, accepted with a note)
+- runs (pass/fail, metrics that moved)
+- `.factory/journal.jsonl` for what git doesn't see: sessions started and finished,
+  rejections, gates passed
+
+A Journal tab and `factory journal [--since] [--element] [--json | --md]`. `--md` writes a
+handover or weekly note that can go to the Obsidian vault.
+
+### Fun, without noise
+- **Celebrations:** passing a gate, locking a baseline, or approving a proposal is
+  marked with a toast and a moment of life in the top-bar factory (smoke puffs, the
+  windows light up). A first lock shows a small banner.
+- **Progress:** the journey bars, the percentage, and a streak ("4 days building").
+- **A calmer layout:**
+  - Tabs: Home · Gates · Requirements · Architecture · Studies (runs inside) · Files ·
+    Agent · Review · Journal.
+  - Modules move to the help/settings screen.
+  - A command palette (`ctrl+p`) for everything.
+- Every visual change is checked against the theme with offscreen screenshots.
+
+### Build order
+1. **Journal + Home**: the data layer everything else reads.
+   `factory home --json`, `factory next`.
+2. **Guided gates**: checklists, playbooks, `space` / `a` on each item.
+3. **ACP client + Agent pane + guardrails**: Copilot first, then the adapters;
+   `AGENTS.md`; the generic skill.
+4. **Kickoff.**
+5. **Fun & layout**: celebrations, journey, tab regroup, command palette.
+
+Each step is tested, usable on its own, and pushed when green.
+
 ## What changes in the scaffold (Phase 0b)
 
 Kept as is: module API, registry, runs, run store, provenance, fingerprints, staleness,
@@ -288,6 +395,6 @@ The particle-telescope and plasma-thruster trees live on as test fixtures.
 ## Open questions
 
 - Vault location (not set up yet).
-- Name (working name *Factory*); projects root (default `~/Hardware`); run store
+- Projects root (default `~/Hardware`, any folder per project since 2026-11-11); run store
   (default `~/Data/factory`, off OneDrive).
 - Element ids/prefixes: free per project, or a fixed scheme (SYS / EL / ME / SW)?
