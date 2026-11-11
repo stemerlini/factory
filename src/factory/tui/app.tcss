@@ -144,6 +144,18 @@ ModalScreen {
 .dialog Button {
     margin-top: 1;
 }
+.field-row {
+    height: auto;
+}
+.field-row Input {
+    width: 1fr;
+}
+.field-row Button {
+    margin: 0 0 0 1;
+}
+.hint {
+    margin-top: 1;
+}
 #project-list {
     height: auto;
     max-height: 24;

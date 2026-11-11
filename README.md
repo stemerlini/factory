@@ -24,6 +24,13 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/pytest
 ```
 
+## New projects
+
+`Ctrl+O` → *New project from a template…* asks for a name, a template and a **location**:
+type it, or press `Browse…` (`Ctrl+B`) for the desktop's folder chooser. The project gets
+its own folder, named after it, inside that location; the dialog shows the full path
+before you create it.
+
 ## Working with an agent
 
 Press `a` in the TUI: start a Claude Code session on the selected element, go to the one

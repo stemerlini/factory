@@ -12,10 +12,10 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Markdown, OptionList, Select
+from textual.widgets import Button, Input, Label, Markdown, OptionList, Select, Static
 from textual.widgets.option_list import Option
 
-from .. import agent, config
+from .. import agent, config, portal
 from ..model import STUDY_GATES, Element
 from ..modules import registry
 from ..project import MANIFEST, Project, ProjectError, create, slug, templates, write_study
@@ -55,35 +55,78 @@ class ProjectPicker(ModalScreen[Path | None]):
 
 
 class NewProjectScreen(ModalScreen[Path | None]):
-    BINDINGS = [Binding("escape", "dismiss(None)", "Close")]
+    """Name, template and location; the project gets its own folder, named after it,
+    inside the chosen location."""
+
+    BINDINGS = [Binding("escape", "dismiss(None)", "Close"),
+                Binding("ctrl+b", "browse", "Choose location")]
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
             yield Label("New project", classes="dialog-title")
+            yield Label("Name")
+            yield Input(placeholder="Particle telescope", id="name")
             yield Label("Template")
             yield Select([(f"{k} — {v}", k) for k, v in templates().items()],
                          value="hardware", allow_blank=False, id="template")
-            yield Label("Name")
-            yield Input(placeholder="Particle telescope", id="name")
-            yield Label(f"Folder (under {config.projects_root()} unless absolute)")
-            yield Input(placeholder="ptel", id="folder")
+            yield Label("Location")
+            with Horizontal(classes="field-row"):
+                yield Input(str(config.projects_root()), id="location")
+                yield Button("Browse…", id="browse")
+            yield Label("Folder name")
+            yield Input(placeholder="project", id="folder")
+            yield Static(id="target", classes="hint")
             yield Button("Create", variant="primary", id="create")
 
-    @on(Input.Changed, "#name")
-    def suggest_folder(self, event: Input.Changed) -> None:
-        self.query_one("#folder", Input).placeholder = slug(event.value) or "ptel"
+    def on_mount(self) -> None:
+        self.query_one("#name", Input).focus()
+        self.show_target()
+
+    def target(self) -> Path:
+        location = Path(self.query_one("#location", Input).value.strip() or "~").expanduser()
+        folder = self.query_one("#folder", Input)
+        return location / (folder.value.strip() or folder.placeholder)
+
+    @on(Input.Changed)
+    def show_target(self, event: Input.Changed | None = None) -> None:
+        if event and event.input.id == "name":
+            self.query_one("#folder", Input).placeholder = slug(event.value) or "project"
+        target = self.target()
+        clash = target.exists() and any(target.iterdir()) if target.is_dir() else target.exists()
+        self.query_one("#target", Static).update(Text.assemble(
+            ("Creates ", "dim"), (str(target), "bold"),
+            ("  — already exists and is not empty" if clash else "", "red")))
+
+    @on(Button.Pressed, "#browse")
+    def action_browse(self) -> None:
+        start = Path(self.query_one("#location", Input).value.strip() or "~").expanduser()
+        self.run_worker(lambda: self._browse(start), thread=True, exclusive=True)
+
+    def _browse(self, start: Path) -> None:
+        try:
+            chosen = portal.choose_folder("Where to create the project", start)
+        except portal.PortalError as e:
+            self.app.call_from_thread(
+                self.notify, f"Can't open the folder chooser: {e}. Type the location instead.",
+                severity="error")
+            return
+        if chosen:
+            self.app.call_from_thread(self._set_location, chosen)
+
+    def _set_location(self, path: Path) -> None:
+        self.query_one("#location", Input).value = str(path)
+        self.query_one("#folder", Input).focus()
 
     @on(Button.Pressed, "#create")
     @on(Input.Submitted)
     def create(self) -> None:
         name = self.query_one("#name", Input).value.strip()
-        folder = self.query_one("#folder", Input)
-        target = Path(folder.value.strip() or folder.placeholder).expanduser()
+        target = self.target()
         if not target.is_absolute():
             target = config.projects_root() / target
         try:
             p = create(target, self.query_one("#template", Select).value, name or None)
-        except ProjectError as e:
+        except (ProjectError, OSError) as e:
             self.notify(str(e), severity="error")
             return
         self.dismiss(p.root)

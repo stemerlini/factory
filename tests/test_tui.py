@@ -28,19 +28,25 @@ async def test_tui_elements_tabs_and_new_study(make):
         assert app.query_one("#study-table", DataTable).row_count == 2
 
 
-async def test_new_project_from_picker_opens_it(tmp_path):
-    (tmp_path / "config/factory").mkdir(parents=True)
-    (tmp_path / "config/factory/config.toml").write_text(
-        f'projects_root = "{tmp_path / "projects"}"\n')
+async def test_new_project_in_a_chosen_location(tmp_path, monkeypatch):
+    from factory import portal
+
+    elsewhere = tmp_path / "work"
+    elsewhere.mkdir()
+    monkeypatch.setattr(portal, "choose_folder", lambda title, start: elsewhere)
     app = FactoryApp(None)
     async with app.run_test(size=(150, 44)) as pilot:
         await pilot.pause()
         await pilot.press("end", "enter")  # "New project from a template…"
         await pilot.pause()
-        await pilot.click("#name")
-        await pilot.press(*"Demo", "enter")
+        await pilot.press(*"Demo", "ctrl+b")
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if app.screen.query_one("#location").value == str(elsewhere):
+                break
+        await pilot.press("enter")
         await pilot.pause()
-        assert app.project and app.project.root == tmp_path / "projects/demo"
+        assert app.project and app.project.root == elsewhere / "demo"
         assert app.screen.__class__.__name__ != "NewProjectScreen"
 
 
