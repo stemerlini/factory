@@ -18,6 +18,8 @@ from . import (
     config,
     decisions,
     gates,
+    home,
+    journal,
     pipeline,
     review,
     runs,
@@ -363,6 +365,7 @@ def cmd_reject(args):
     p = load(args)
     for path in args.paths:
         review.reject(p, path)
+        journal.record(p, "reject", f"Discarded the change to {path}")
     out(args, {"rejected": args.paths}, f"Discarded {len(args.paths)} change(s)")
 
 
@@ -399,6 +402,53 @@ def cmd_agent(args):
         return
     os.chdir(p.root)
     os.execvp(argv[0], argv)
+
+
+def event_dict(e: journal.Event) -> dict:
+    return {"time": e.time, "kind": e.kind, "title": e.title, "element": e.element,
+            "detail": e.detail}
+
+
+def cmd_home(args):
+    p = load(args)
+    h, _ = home.load(p)
+    data = {"waiting": [i.__dict__ for i in h.waiting], "next": [s.__dict__ for s in h.steps],
+            "journey": [{"element": r.element, "title": r.title, "gates": r.statuses}
+                        for r in h.journey],
+            "progress": round(h.progress, 3), "streak": h.streak,
+            "recent": [event_dict(e) for e in h.recent]}
+    lines = [f"{p.name}: {h.progress:.0%} of the way"
+             + (f" · {h.streak} day(s) in a row" if h.streak > 1 else "")]
+    lines += ["", "Waiting on you"] + ([f"  {i.text}" for i in h.waiting] or ["  nothing"])
+    lines += ["", "Next"] + [f"  {s.title:28} {s.gate_title}: {s.detail}" for s in h.steps]
+    lines += ["", "Journey"] + [f"  {'  ' * r.depth}{r.title:{28 - 2 * r.depth}} "
+                                f"{home.journey_bar(r.statuses)}" for r in h.journey]
+    if h.recent:
+        lines += ["", "Recently"] + [f"  {e.ago:>10}  {e.title}"
+                                     for e in h.recent]
+    out(args, data, "\n".join(lines))
+
+
+def cmd_next(args):
+    p = load(args)
+    h, _ = home.load(p)
+    steps = [s for s in h.steps if args.element is None or s.element == args.element.strip("/")]
+    out(args, [s.__dict__ for s in steps], "\n".join(
+        f"{s.title:28} {s.gate_title}: {s.detail}" for s in steps) or "Every gate is done.")
+
+
+def cmd_journal(args):
+    p = load(args)
+    since = None
+    if args.since:
+        since = dt.datetime.now().astimezone() - dt.timedelta(days=args.since)
+    found = journal.events(p, since, args.element, args.limit)
+    if args.md:
+        print(journal.markdown(p, found), end="")
+        return
+    out(args, [event_dict(e) for e in found], "\n".join(
+        f"{e.when:%Y-%m-%d %H:%M}  {journal.MARKS.get(e.kind, '·')} {e.title}"
+        + (f"  ({e.element})" if e.element else "") for e in found) or "Nothing yet.")
 
 
 def cmd_projects(args):
@@ -443,6 +493,14 @@ def parser() -> argparse.ArgumentParser:
     add("templates", cmd_templates, "list project templates")
     add("projects", cmd_projects, "list known projects")
     add("status", cmd_status, "project overview")
+    add("home", cmd_home, "what now: waiting on you, next steps, journey, recent events")
+    p = add("next", cmd_next, "each element's next step")
+    p.add_argument("-e", "--element", help="only this element")
+    p = add("journal", cmd_journal, "the project's timeline, newest first")
+    p.add_argument("-e", "--element", help="only this element")
+    p.add_argument("--since", type=int, metavar="DAYS", help="only the last DAYS days")
+    p.add_argument("-n", "--limit", type=int, help="at most this many entries")
+    p.add_argument("--md", action="store_true", help="a Markdown handover note")
     for name in ("req", "trace"):
         p = add(name, cmd_req, "requirements with their trace status")
         p.add_argument("-e", "--element", help="only this element")

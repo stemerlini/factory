@@ -81,8 +81,9 @@ Everything you create is a **draft** (`status: draft`).
 
 ## Work in an existing project
 
-- **Orient** with `factory status --json` and `factory gates <element>`; the first gate
-  that is not done is the work in front of you.
+- **Orient** with `factory home --json` (what waits on the user, each element's next
+  step, recent events) and `factory gates <element>`; the first gate that is not done is
+  the work in front of you. `factory journal --since 7` shows what happened lately.
 - **Change** files per FORMATS.md, then `factory check`. A changed input makes its
   studies and their requirements stale: rerun with `factory run <key> -w`.
 - **Long runs** (Geant4, PIC) start in the background with `factory run <key>`; follow
@@ -100,6 +101,7 @@ Everything you create is a **draft** (`status: draft`).
 ```sh
 factory templates | tasks | modules             # what exists: templates, tasks+params, kinds, health
 factory new NAME -t TEMPLATE
+factory home | next [-e EL] | journal [--since DAYS] [-e EL] [--md]
 factory status | check | req [-e EL] | studies [-e EL] | gates [EL] | arch [EL]
 factory show KEY ; factory run KEY [-w] ; factory runs [KEY] ; factory log RUN ; factory cancel RUN
 factory decompose BLOCK [-e PARENT]

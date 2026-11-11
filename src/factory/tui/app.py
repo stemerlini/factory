@@ -36,11 +36,14 @@ from .. import (
     config,
     decisions,
     gates,
+    home,
+    journal,
     pipeline,
     review,
     runs,
     trace,
 )
+from ..model import GATES as GATES_ORDER
 from ..model import Element
 from ..modules import registry
 from ..project import Project, ProjectError
@@ -79,8 +82,13 @@ GATE_STYLE = {
 }
 RUN_STYLE = {"done": "green", "failed": "red", "running": "cyan", "queued": "cyan",
              "cancelled": "yellow"}
-TABS = ("overview", "requirements", "architecture", "studies", "results", "files", "modules",
-        "review")
+TABS = ("home", "overview", "requirements", "architecture", "studies", "results", "files",
+        "review", "journal", "modules")
+WAITING_MARK = {"review": ("●", "magenta"), "decision": ("?", "yellow"), "failed": ("✗", "red"),
+                "stale": ("●", "yellow"), "unlocked": ("◆", "red"), "problem": ("!", "red")}
+JOURNAL_STYLE = {"approve": "green", "lock": "magenta", "decision": "yellow", "decided": "green",
+                 "run": "cyan", "failed": "red", "agent": "blue", "reject": "yellow",
+                 "gate": "bold yellow"}
 DIFF_STYLE = {"+": "green", "-": "red", "@": "cyan"}
 
 
@@ -110,7 +118,8 @@ class FactoryApp(App):
         Binding("c", "cancel_run", "Cancel run", show=False),
         Binding("ctrl+o", "pick_project", "Projects"),
         Binding("ctrl+r", "refresh", "Reload", show=False),
-        *(Binding(str(i), f"tab('{t}')", t.title(), show=False) for i, t in enumerate(TABS, 1)),
+        *(Binding(str(i % 10), f"tab('{t}')", t.title(), show=False)
+          for i, t in enumerate(TABS, 1)),
         Binding("a", "agent", "Agent"),
         Binding("y", "approve", "Approve", show=False),
         Binding("x", "reject", "Reject", show=False),
@@ -132,6 +141,7 @@ class FactoryApp(App):
         self._git_seen: tuple = ()
         self._agent_live = False
         self.pending: list[review.Change] = []
+        self.home = home.Home()
 
     # --- layout ----------------------------------------------------------------------------
 
@@ -151,7 +161,20 @@ class FactoryApp(App):
                 yield Static(id="trace-summary")
             with Vertical(id="main"):
                 yield Static(id="gate-bar")
-                with TabbedContent(id="tabs", initial="overview"):
+                with TabbedContent(id="tabs", initial="home"):
+                    with TabPane("Home", id="home"):
+                        with VerticalScroll(id="home-scroll"):
+                            yield Static(id="home-hero")
+                            yield Label("WAITING ON YOU", classes="pane-title")
+                            yield DataTable(id="waiting-table", cursor_type="row",
+                                            classes="home-table")
+                            yield Label("NEXT STEPS", classes="pane-title")
+                            yield DataTable(id="next-table", cursor_type="row",
+                                            classes="home-table")
+                            yield Label("JOURNEY", classes="pane-title")
+                            yield Static(id="journey")
+                            yield Label("RECENTLY", classes="pane-title")
+                            yield Static(id="recent")
                     with TabPane("Overview", id="overview"):
                         with VerticalScroll():
                             yield Markdown(id="description")
@@ -176,8 +199,6 @@ class FactoryApp(App):
                         with Horizontal():
                             yield DirectoryTree(".", id="file-tree")
                             yield VerticalScroll(Static(id="file-preview"), id="file-scroll")
-                    with TabPane("Modules", id="modules"):
-                        yield DataTable(id="module-table", cursor_type="row")
                     with TabPane("Review", id="review"):
                         yield Markdown(id="proposal")
                         with Horizontal(id="review-body"):
@@ -185,6 +206,11 @@ class FactoryApp(App):
                             yield VerticalScroll(Static(id="diff"), id="diff-scroll")
                         yield DataTable(id="decision-table", cursor_type="row",
                                         classes="detail")
+                    with TabPane("Journal", id="journal"):
+                        yield DataTable(id="journal-table", cursor_type="row",
+                                        zebra_stripes=True)
+                    with TabPane("Modules", id="modules"):
+                        yield DataTable(id="module-table", cursor_type="row")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -207,6 +233,10 @@ class FactoryApp(App):
         self.query_one("#change-table", DataTable).add_columns("", "Change", "Element", "File")
         self.query_one("#decision-table", DataTable).add_columns(
             "", "Decision", "Title", "By", "Recommended", "Chosen")
+        self.query_one("#waiting-table", DataTable).add_columns("", "What", "Element")
+        self.query_one("#next-table", DataTable).add_columns("", "Element", "Gate", "Next step")
+        self.query_one("#journal-table", DataTable).add_columns(
+            "When", "", "What", "Element", "Detail")
         self.query_one("#output-tree", Tree).show_root = False
         if self.root:
             self.open_project(self.root)
@@ -266,10 +296,14 @@ class FactoryApp(App):
         except ProjectError as e:
             self.notify(str(e), severity="error", timeout=8)
             return
+        for event in journal.passed_gates(self.project, self.gate_states,
+                                          {p: e.title for p, e in self.elements.items()}):
+            self.notify(event.title, title="★ Gate passed", timeout=6)
         self.refresh_topbar()
         self.refresh_tree_labels()
         self.refresh_element()
         self.refresh_review()
+        self.refresh_home()
 
     def refresh_element(self) -> None:
         if not self.element:
@@ -369,6 +403,119 @@ class FactoryApp(App):
         self.element_path = path
         self.selected_run = None
         self.refresh_element()
+
+    def select_element(self, path: str) -> None:
+        """Make an element current, as if picked in the tree."""
+        if path not in self.elements:
+            return
+        node = self.nodes.get(path)
+        if node is not None:
+            self.query_one("#elements", Tree).move_cursor(node)
+        if path != self.element_path:
+            self.element_path = path
+            self.selected_run = None
+            self.refresh_element()
+
+    # --- home and journal ------------------------------------------------------------------
+
+    def refresh_home(self) -> None:
+        h = home.build(self.project, list(self.elements.values()), self.states,
+                       self.gate_states)
+        self.home = h
+        width = 30
+        filled = round(h.progress * width)
+        hero = Text.assemble(
+            (self.project.name, "bold"), "   ",
+            ("█" * filled, "green"), ("░" * (width - filled), "dim"),
+            (f" {h.progress:.0%}", "bold"), " of the way")
+        if h.streak > 1:
+            hero.append(f"   ▲ {h.streak} days in a row", "yellow")
+        if not h.waiting:
+            hero.append("\nNothing is waiting on you.", "dim")
+        self.query_one("#home-hero", Static).update(hero)
+
+        table = self.query_one("#waiting-table", DataTable)
+        keep = table.cursor_row
+        table.clear()
+        for n, item in enumerate(h.waiting):
+            title = self.elements[item.element].title if item.element in self.elements else ""
+            table.add_row(mark(*WAITING_MARK.get(item.kind, ("·", ""))), item.text,
+                          Text(title, "dim"), key=str(n))
+        if not h.waiting:
+            table.add_row(mark("✓", "green"), Text("All clear: pick a next step below", "dim"),
+                          "", key="none")
+        table.move_cursor(row=min(keep, table.row_count - 1))
+
+        table = self.query_one("#next-table", DataTable)
+        keep = table.cursor_row
+        table.clear()
+        for step in h.steps:
+            e = self.elements[step.element]
+            table.add_row(mark(registry.kind(e.kind).icon, "bold"), e.title,
+                          Text(step.gate_title, "yellow"), step.detail, key=step.element)
+        if h.steps:
+            table.move_cursor(row=min(keep, table.row_count - 1))
+
+        journey = Text()
+        pad = max((len(r.title) + 2 * r.depth for r in h.journey), default=10) + 2
+        journey.append(" " * pad + " ".join(t[0] for _, t in GATES_ORDER) + "\n", "dim")
+        for r in h.journey:
+            journey.append(f"{'  ' * r.depth}{r.title}".ljust(pad))
+            for status in r.statuses:
+                journey.append("■ " if status == gates.DONE else
+                               {gates.PARTIAL: "◐ ", gates.SKIPPED: "· ",
+                                gates.UNLOCKED: "◆ "}.get(status, "□ "),
+                               GATE_STYLE[status])
+            journey.append("\n")
+        self.query_one("#journey", Static).update(journey)
+
+        recent = Text()
+        for e in h.recent:
+            recent.append(f"{e.ago:>11}  ", "dim")
+            recent.append(journal.MARKS.get(e.kind, "·") + " ", JOURNAL_STYLE.get(e.kind, ""))
+            recent.append(e.title + "\n")
+        self.query_one("#recent", Static).update(recent or Text("Nothing yet.", "dim"))
+        self.refresh_journal()
+
+    def refresh_journal(self) -> None:
+        table = self.query_one("#journal-table", DataTable)
+        keep = table.cursor_row
+        table.clear()
+        for n, e in enumerate(journal.events(self.project, limit=500)):
+            title = self.elements[e.element].title if e.element in self.elements else ""
+            table.add_row(Text(f"{e.when:%Y-%m-%d %H:%M}" if e.when.year > 1 else "", "dim"),
+                          mark(journal.MARKS.get(e.kind, "·"), JOURNAL_STYLE.get(e.kind, "")),
+                          e.title, Text(title, "dim"), Text(e.detail, "dim"), key=str(n))
+        if table.row_count:
+            table.move_cursor(row=min(keep, table.row_count - 1))
+
+    @on(DataTable.RowSelected, "#waiting-table")
+    def open_waiting(self, event: DataTable.RowSelected) -> None:
+        if event.row_key.value == "none":
+            return
+        item = self.home.waiting[int(event.row_key.value)]
+        if item.element in self.elements:
+            self.select_element(item.element)
+        if item.kind == "review":
+            self.action_tab("review")
+        elif item.kind == "decision":
+            self.decide(item.target)
+        elif item.kind in ("failed", "stale"):
+            self.action_tab("studies")
+            table = self.query_one("#study-table", DataTable)
+            try:
+                table.move_cursor(row=table.get_row_index(item.target))
+            except Exception:  # noqa: BLE001 - the row may have gone since the refresh
+                pass
+        elif item.kind == "problem":
+            self.action_tab("requirements")
+        else:
+            self.action_tab("overview")
+
+    @on(DataTable.RowSelected, "#next-table")
+    def open_step(self, event: DataTable.RowSelected) -> None:
+        self.select_element(event.row_key.value)
+        self.action_tab("overview")
 
     # --- tabs ------------------------------------------------------------------------------
 
@@ -815,7 +962,10 @@ class FactoryApp(App):
 
     @on(DataTable.RowSelected, "#decision-table")
     def open_decision(self, event: DataTable.RowSelected) -> None:
-        d = decisions.get(self.project, event.row_key.value)
+        self.decide(event.row_key.value)
+
+    def decide(self, key: str) -> None:
+        d = decisions.get(self.project, key)
         if d.status != "proposed":
             self.notify(f"{d.key} is already {d.status}")
             return
@@ -832,6 +982,7 @@ class FactoryApp(App):
             self.notify(f"{decided.key}: {decided.status}"
                         + (f" ({decided.chosen})" if decided.chosen else ""))
             self.refresh_review()
+            self.refresh_home()
 
         self.push_screen(DecideScreen(d), done)
 
@@ -871,6 +1022,8 @@ class FactoryApp(App):
             except ProjectError as e:
                 self.notify(str(e), severity="error")
                 return
+            journal.record(self.project, "reject", f"Discarded the change to {path}",
+                           self.element_path)
             self.notify(f"Discarded the change to {path}")
             self.rebuild_tree()
             self.refresh_all()

@@ -341,7 +341,8 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 
 | Key | |
 |---|---|
-| `1`…`7` | Overview · Requirements · Architecture · Studies · Results · Files · Modules |
+| `1`…`9`, `0` | tabs: Home, Overview, Requirements, Architecture, Studies, Results… |
+| `enter` | on Home: go to what waits on you, or to an element's next step |
 | `r` | run the selected study (in the background) |
 | `v` | view the selected file or output (ParaView, f3d, image…) |
 | `n` | new study in this element |
@@ -352,6 +353,7 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 | `c` | cancel the selected run |
 | `a` | agent: go to the running session, continue the last one, or start one here |
 | `8` | Review: the agent's proposal, its changes (diff) and open decisions |
+| `9` | Journal: approvals, locks, decisions, runs and gates passed, newest first |
 | `y` / `x` | approve (commit) / discard pending changes (Review tab) |
 | `enter` | answer the selected decision (Review tab) |
 | `ctrl+o` / `ctrl+r` | switch project / reload |

@@ -294,6 +294,14 @@ def create(target: Path, template: str = "hardware", name: str | None = None,
 
     if git and shutil.which("git"):
         subprocess.run(["git", "init", "-q", str(target)], check=True)
+        # The template is the starting point, not work to review: commit it, so the Review
+        # tab starts empty and the journal starts with the project. Without a git identity
+        # the commit fails and the files stay uncommitted, as before.
+        subprocess.run(["git", "-C", str(target), "add", "-A"], check=False)
+        subprocess.run(["git", "-C", str(target), "commit", "-q", "-m",
+                        f"Start {data['project']['name']} from the "
+                        f"{data['project']['template']} template"],
+                       check=False, capture_output=True)
     return Project.load(target)
 
 

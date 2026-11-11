@@ -24,6 +24,25 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/pytest
 ```
 
+## Home and journal
+
+Factory opens on **Home**, which answers "what now?" for the whole project:
+
+- **Waiting on you:** changes to review, open decisions, failed or stale studies,
+  and elements changed since their lock. Enter takes you there.
+- **Next steps:** each element's current gate and what it needs. Enter opens that element.
+- **Journey:** every element's eight gates as a row of cells, plus the project's progress.
+- **Recently:** the latest entries in the **Journal**.
+
+The Journal tab (`9`) is the project's timeline: approvals, locks, decisions, runs,
+discarded changes and gates passed. A toast marks each gate as it passes.
+
+```bash
+factory home          # the same summary; --json for agents
+factory next          # each element's next step
+factory journal --since 7 --md > handover.md
+```
+
 ## New projects
 
 `Ctrl+O` → *New project from a template…* asks for a name, a template and a **location**:

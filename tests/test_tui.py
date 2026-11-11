@@ -19,7 +19,7 @@ async def test_tui_elements_tabs_and_new_study(make):
         await pilot.pause()
         assert app.element_path == "fee"
         assert app.query_one("#req-table", DataTable).row_count == 1
-        await pilot.press("4", "n")
+        await pilot.press("5", "n")
         await pilot.pause()
         assert app.screen.__class__.__name__ == "NewStudyScreen"
         await pilot.press(*"Noise", "enter")
@@ -48,6 +48,25 @@ async def test_new_project_in_a_chosen_location(tmp_path, monkeypatch):
         await pilot.pause()
         assert app.project and app.project.root == elsewhere / "demo"
         assert app.screen.__class__.__name__ != "NewProjectScreen"
+
+
+async def test_home_opens_what_waits(make):
+    from factory import decisions
+
+    p = make()
+    decisions.ask(p, p.element("fee"), "ADC architecture", ["SAR", "Sigma-delta"], "A")
+    app = FactoryApp(p.root)
+    async with app.run_test(size=(150, 44)) as pilot:
+        await pilot.pause()
+        waiting = app.query_one("#waiting-table", DataTable)
+        assert app._tab() == "home"
+        waiting.focus()
+        row = next(i for i, item in enumerate(app.home.waiting) if item.kind == "decision")
+        waiting.move_cursor(row=row)
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "DecideScreen"
+        assert app.element_path == "fee"
 
 
 def test_editor_command_splits_flags(monkeypatch, tmp_path):

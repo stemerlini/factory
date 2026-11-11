@@ -45,8 +45,6 @@ def test_lock_and_unlock(make):
     p = make()
     runs.execute(p, p.study("sensor-head/S001"))
     head = p.element("sensor-head")
-    with pytest.raises(ProjectError, match="no commits"):
-        gates.lock(p, head)
     commit(p)
     tag = gates.lock(p, head)
     assert tag == "lock/sensor-head/v1"

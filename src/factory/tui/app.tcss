@@ -198,3 +198,19 @@ ModalScreen {
 .buttons Button {
     margin-right: 2;
 }
+
+/* -- home ----------------------------------------------------------------- */
+
+#home-scroll {
+    padding: 0 1;
+}
+#home-hero {
+    padding: 1 1 0 1;
+}
+.home-table {
+    height: auto;
+    max-height: 11;
+}
+#journey, #recent {
+    padding: 0 1;
+}
