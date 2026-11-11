@@ -258,6 +258,7 @@ AgentPane {
 .agent-question {
     display: none;
     height: auto;
+    max-height: 60%;
     padding: 0 1;
     border: tall $accent;
     background: $boost;
@@ -266,8 +267,18 @@ AgentPane {
     border: tall $accent;
     background: $accent 15%;
 }
+#question-scroll {
+    height: auto;
+    max-height: 12;
+}
+#question-keys {
+    margin-top: 1;
+}
 .agent-input {
     margin: 0 0;
+}
+.dialog .comment {
+    height: 6;
 }
 .dialog .idea {
     height: 4;

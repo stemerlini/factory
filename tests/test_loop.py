@@ -75,6 +75,26 @@ def test_review_approve_and_reject(make):
     assert list((p.root / ".factory/proposals").glob("*.md"))
 
 
+def test_review_submit(make):
+    p = make()
+    commit_all(p)
+    for name in ("a.md", "b.md", "c.md"):
+        (p.root / name).write_text(name)
+    review.save_marks(p, {"a.md": {"verdict": "accept"}, "b.md": {"verdict": "reject"},
+                          "c.md": {"comment": "Shorter"}, "gone.md": {"verdict": "accept"}})
+    found = review.marks(p)
+    assert set(found) == {"a.md", "b.md", "c.md"}  # marks on files no longer pending drop
+    with pytest.raises(ProjectError):
+        review.submit(p, found, "")
+    out = review.submit(p, found, "Add a")
+    assert [c.path for c in review.changes(p)] == ["c.md"]
+    assert p.git("log", "-1", "--format=%s") == "Add a"
+    assert "Discarded: b.md" in out.feedback and "- c.md: Shorter" in out.feedback
+    assert review.marks(p) == {}
+    (p.root / "d.md").write_text("d")
+    assert review.submit(p, {"d.md": {"verdict": "accept"}}, "Add d").feedback == ""
+
+
 def test_cli_review_flow(make, capsys):
     p = make("blank")
     commit_all(p)

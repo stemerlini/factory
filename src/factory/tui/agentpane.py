@@ -12,7 +12,7 @@ from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.message import Message
 from textual.widgets import Input, Static
 
@@ -52,8 +52,11 @@ def render(session: live.Live | None, element: str) -> Group:
             symbol, style = STATUS_MARK.get(e.status, ("·", "dim"))
             icon = TOOL_ICON.get(e.raw.get("kind", ""), "·")
             detail = acp.command_of(e.raw) if e.raw.get("kind") == "execute" else e.text
+            lines = detail.splitlines() or [""]
             parts.append(Text.assemble((f"  {symbol} ", style), (f"{icon} ", "bold"),
-                                       (detail, "" if e.status != "failed" else "red")))
+                                       (lines[0], "" if e.status != "failed" else "red"),
+                                       (f"  (+{len(lines) - 1} lines)" if len(lines) > 1
+                                        else "", "dim")))
         elif e.kind == "plan":
             for step in e.raw.get("entries", []):
                 symbol, style = PLAN_MARK.get(step.get("status"), ("□", "dim"))
@@ -69,12 +72,17 @@ def render(session: live.Live | None, element: str) -> Group:
     return Group(*parts)
 
 
-class Question(Horizontal, can_focus=True):
-    """What the agent asks, and the keys that answer it."""
+class Question(Vertical, can_focus=True):
+    """What the agent asks, and the keys that answer it. A long command scrolls in its own
+    box, so the keys stay in view however much the agent wants to run."""
 
     BINDINGS = [Binding("y", "answer('allow')", "Allow"),
                 Binding("s", "answer('always')", "Always this session"),
-                Binding("n", "answer('deny')", "Deny")]
+                Binding("n", "answer('deny')", "Deny"),
+                Binding("up", "scroll_what(-1)", "Scroll", show=False),
+                Binding("down", "scroll_what(1)", "Scroll", show=False),
+                Binding("pageup", "scroll_what(-10)", "Scroll", show=False),
+                Binding("pagedown", "scroll_what(10)", "Scroll", show=False)]
 
     class Answered(Message):
         def __init__(self, choice: str) -> None:
@@ -82,7 +90,24 @@ class Question(Horizontal, can_focus=True):
             self.choice = choice
 
     def compose(self) -> ComposeResult:
-        yield Static(id="question-text")
+        yield Static(id="question-title")
+        with VerticalScroll(id="question-scroll"):
+            yield Static(id="question-text")
+        yield Static(id="question-keys")
+
+    def ask(self, title: str, what: str, keys: Text) -> None:
+        if getattr(self, "_what", None) != what:
+            self._what = what
+            self.query_one("#question-scroll", VerticalScroll).scroll_home(animate=False)
+        self.query_one("#question-title", Static).update(Text(title, "bold magenta"))
+        self.query_one("#question-text", Static).update(Text(what, "bold"))
+        lines = len(what.splitlines())
+        self.query_one("#question-keys", Static).update(
+            keys + Text(f"   ↑↓ scroll the {lines} lines", "dim") if lines > 8 else keys)
+
+    def action_scroll_what(self, rows: int) -> None:
+        scroll = self.query_one("#question-scroll", VerticalScroll)
+        scroll.scroll_relative(y=rows, animate=False)
 
     def action_answer(self, choice: str) -> None:
         self.post_message(self.Answered(choice))
@@ -125,9 +150,8 @@ class AgentPane(Vertical):
             if asking.command:
                 keys.append_text(Text.assemble("  ", ("s", "bold"),
                                                f" always allow `{asking.command}` this session"))
-            question.query_one("#question-text", Static).update(Text.assemble(
-                (f"{session.title} asks to run:\n" if asking.command else
-                 f"{session.title} asks:\n", "bold magenta"), (what, "bold"), "\n", keys))
+            question.ask(f"{session.title} asks to run:" if asking.command else
+                         f"{session.title} asks:", what, keys)
         self.query_one(Input).disabled = session is None or session.state in (
             live.STARTING, live.FAILED, live.STOPPED)
 

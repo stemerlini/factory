@@ -118,6 +118,25 @@ the Review tab (`8`) with `.factory/proposal.md`, its handover to the next sessi
 project carries `AGENTS.md` (and `CLAUDE.md`, which imports it) with these rules, and
 `factory skill install` gives Claude Code, Copilot and others the `factory` skill.
 
+### Reviewing the agent's work
+
+The Review tab (`8`) works like a pull request. The proposal sits on top; below it, every
+changed file with its diff. Go through the files and mark each one:
+
+| Key | |
+|---|---|
+| `y` | accept the file (again to undo) |
+| `x` | reject it: it will be discarded |
+| `c` | comment: what the agent should change (the file stays pending) |
+| `Y` | accept every file not yet marked or commented |
+| `S` | submit the review |
+
+Submitting commits the accepted files (with the proposal's title as the message, which you
+can edit), discards the rejected ones, and sends your comments, plus any overall feedback,
+to the agent, which revises and stops again for review. Marks are kept in
+`.factory/review.json` until you submit, so a review can span sessions. `enter` on a
+decision answers it.
+
 `A` opens Claude Code in its own terminal window instead, as before:
 
 ```bash

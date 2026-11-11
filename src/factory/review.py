@@ -4,20 +4,29 @@ An agent never commits. What it changed sits in the working tree with a *proposa
 (``.factory/proposal.md``: a title line, then what changed and why). The human approves
 (commit, with the proposal's title as the message) or rejects (discard) per file,
 per element or all at once.
+
+In the app the human reviews file by file, as on a pull request: each file is marked
+accepted or rejected and may carry a comment. *Submitting* the review commits what was
+accepted, discards what was rejected, and turns the comments into feedback for the agent;
+files with only a comment stay pending for the agent to revise.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import json
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .model import Element
 from .project import Project, ProjectError
 
 PROPOSAL = ".factory/proposal.md"
+MARKS = ".factory/review.json"  # the review in progress: {path: {"verdict", "comment"}}
+ACCEPT, REJECT = "accept", "reject"
+FEEDBACK = "Review of your proposal"
 STATUS_TEXT = {"??": "new", "A": "added", "M": "modified", "D": "deleted", "R": "renamed"}
 
 
@@ -136,3 +145,63 @@ def archive_proposal(project: Project) -> Path | None:
     target.parent.mkdir(parents=True, exist_ok=True)
     path.replace(target)
     return target
+
+
+def marks(project: Project) -> dict[str, dict]:
+    """The review in progress, for files that are still pending."""
+    try:
+        found = json.loads((project.root / MARKS).read_text())
+    except (OSError, ValueError):
+        return {}
+    pending = {c.path for c in changes(project)}
+    return {p: m for p, m in found.items() if p in pending and (m.get("verdict")
+                                                                or m.get("comment"))}
+
+
+def save_marks(project: Project, found: dict[str, dict]) -> None:
+    path = project.root / MARKS
+    path.parent.mkdir(parents=True, exist_ok=True)
+    kept = {p: m for p, m in found.items() if m.get("verdict") or m.get("comment")}
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(kept, indent=1))
+    tmp.replace(path)
+
+
+@dataclass
+class Outcome:
+    head: str = ""
+    accepted: list[str] = field(default_factory=list)
+    rejected: list[str] = field(default_factory=list)
+    feedback: str = ""  # for the agent; empty when there is nothing to tell it
+
+
+def submit(project: Project, found: dict[str, dict], message: str, overall: str = "") -> Outcome:
+    """Apply a review: discard the rejected files, commit the accepted ones, and write the
+    feedback for the agent. Comments on files left pending ask the agent to revise them."""
+    out = Outcome(accepted=[p for p, m in found.items() if m.get("verdict") == ACCEPT],
+                  rejected=[p for p, m in found.items() if m.get("verdict") == REJECT])
+    if out.accepted and not message.strip():
+        raise ProjectError("accepting files commits them: write a commit message")
+    for path in out.rejected:
+        reject(project, path)
+    if out.accepted:
+        out.head = approve(project, out.accepted, message)
+    comments = [(p, m.get("verdict"), m["comment"].strip()) for p, m in found.items()
+                if (m.get("comment") or "").strip()]
+    if comments or overall.strip() or out.rejected:
+        lines = [f"{FEEDBACK} (the human's review in Factory).", ""]
+        if out.accepted:
+            lines.append(f"Accepted and committed as {out.head}: {', '.join(out.accepted)}")
+        if out.rejected:
+            lines.append(f"Discarded: {', '.join(out.rejected)}")
+        if comments:
+            lines += ["", "Changes requested:"]
+            tag = {ACCEPT: " (accepted)", REJECT: " (discarded)"}
+            lines += [f"- {p}{tag.get(v, '')}: {c}" for p, v, c in comments]
+        if overall.strip():
+            lines += ["", f"Overall: {overall.strip()}"]
+        lines += ["", "Revise what the comments ask for, leave the committed files as they are, "
+                  "update .factory/proposal.md, and stop again for review."]
+        out.feedback = "\n".join(lines)
+    save_marks(project, {})
+    return out

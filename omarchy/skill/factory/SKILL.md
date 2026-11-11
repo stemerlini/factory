@@ -42,6 +42,10 @@ The user is the engineer of record; you work to their review. Every session:
    only in the chat.
 5. **Hand over.** End with: what to review (Review tab, key `8`), decisions waiting, and
    what you would do next.
+6. **Take the review.** The user marks each file accepted, rejected or commented and
+   submits; you get a message starting "Review of your proposal". Accepted files are
+   committed, rejected ones discarded: revise only what the comments ask, update the
+   proposal, and stop again.
 
 Committing, tagging, locking, approving and deciding belong to the user (the project's
 `.claude/settings.json` blocks them); so do `status: approved` on requirements.

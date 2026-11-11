@@ -215,6 +215,8 @@ each gate still needs.
   `decide`, `approve` or `reject`: those are the user's.
 - A trade-off that is the user's to make becomes a question (`factory ask`), not a guess.
 - Before you stop, write what you did and what comes next in `.factory/proposal.md`.
+- A message starting "Review of your proposal" is the user's review: committed files are
+  done; revise the ones with comments, then update the proposal and stop again.
 """
 # Claude Code reads CLAUDE.md, and imports AGENTS.md from it; the other agents read AGENTS.md.
 CLAUDE_MD = "@AGENTS.md\n"

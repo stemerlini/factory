@@ -4,6 +4,7 @@ the project and starts runs as separate processes, so closing it never stops a s
 
 from __future__ import annotations
 
+import asyncio
 import os
 import shlex
 import shutil
@@ -57,13 +58,14 @@ from . import logo
 from .agentpane import AgentPane, Question
 from .screens import (
     AgentScreen,
-    ApproveScreen,
+    CommentScreen,
     ConfirmScreen,
     DecideScreen,
     HelpScreen,
     ModulesScreen,
     NewStudyScreen,
     ProjectPicker,
+    SubmitScreen,
 )
 from .theme import omarchy_theme
 
@@ -124,6 +126,11 @@ class FactoryApp(App):
         Binding("o", "open", "Open"),
         Binding("d", "decompose", "Decompose", show=False),
         Binding("L", "lock", "Lock", show=False),
+        Binding("y", "mark('accept')", "Accept"),
+        Binding("x", "mark('reject')", "Reject"),
+        Binding("c", "comment", "Comment"),
+        Binding("Y", "accept_rest", "Accept the rest"),
+        Binding("S", "submit_review", "Submit review"),
         Binding("c", "cancel_run", "Cancel run", show=False),
         Binding("m", "modules", "Modules", show=False),
         Binding("ctrl+o", "pick_project", "Projects"),
@@ -133,8 +140,6 @@ class FactoryApp(App):
         Binding("a", "agent", "Agent"),
         Binding("A", "agent_window", "Agent window", show=False),
         Binding("ctrl+a", "drawer", "Agent pane", priority=True),
-        Binding("y", "approve", "Approve", show=False),
-        Binding("x", "reject", "Reject", show=False),
         Binding("space", "do_item", "Do it", show=False),
         Binding("question_mark", "help", "Help"),
     ]
@@ -154,6 +159,7 @@ class FactoryApp(App):
         self._git_seen: tuple = ()
         self._agent_live = False
         self.pending: list[review.Change] = []
+        self.marks: dict[str, dict] = {}  # the review in progress, per file
         self.home = home.Home()
         self.checks: dict[str, dict[str, list[guide.Check]]] = {}
         self._checks_shown: str | None = None
@@ -221,6 +227,7 @@ class FactoryApp(App):
                         yield AgentPane(id="agent-tab")
                     with TabPane("Review", id="review"):
                         yield Markdown(id="proposal")
+                        yield Static(id="review-bar")
                         with Horizontal(id="review-body"):
                             yield DataTable(id="change-table", cursor_type="row")
                             yield VerticalScroll(Static(id="diff"), id="diff-scroll")
@@ -247,7 +254,8 @@ class FactoryApp(App):
             "", "Id", "Title", "Task", "Gate", "Last run", "Why")
         self.query_one("#run-table", DataTable).add_columns(
             "", "Run", "Status", "Metrics", "Commit")
-        self.query_one("#change-table", DataTable).add_columns("", "Change", "Element", "File")
+        self.query_one("#change-table", DataTable).add_columns(
+            "", "Change", "Element", "File", "")
         self.query_one("#decision-table", DataTable).add_columns(
             "", "Decision", "Title", "By", "Recommended", "Chosen")
         self.query_one("#waiting-table", DataTable).add_columns("", "What", "Element")
@@ -1069,13 +1077,16 @@ class FactoryApp(App):
                 text or "_No proposal note: the changes below came without an explanation._")
         else:
             self.query_one("#proposal", Markdown).update("_Nothing waiting for review._")
+        self.marks = review.marks(p)
         table = self.query_one("#change-table", DataTable)
         keep = table.cursor_row
         table.clear()
-        style = {"new": "green", "deleted": "red"}
+        verdict = {review.ACCEPT: ("✓", "bold green"), review.REJECT: ("✗", "bold red")}
         for c in self.pending:
-            table.add_row(mark("●", style.get(c.kind, "yellow")), c.kind, c.element or "system",
-                          c.path, key=c.path)
+            m = self.marks.get(c.path, {})
+            table.add_row(mark(*verdict.get(m.get("verdict"), ("·", "dim"))), c.kind,
+                          c.element or "system", c.path,
+                          mark("✎", "yellow") if m.get("comment") else "", key=c.path)
         if table.row_count:
             table.move_cursor(row=min(keep, table.row_count - 1))
         else:
@@ -1089,17 +1100,24 @@ class FactoryApp(App):
             dtable.add_row(mark(*marks[d.status]), d.key, d.title, d.raised_by,
                            f"{d.recommended}: {rec.title}" if rec else "",
                            f"{d.chosen}: {chosen.title}" if chosen else "", key=d.key)
+        self.refresh_review_bar()
         n = len(self.pending) + len(waiting)
         tab = self.query_one("#tabs", TabbedContent).get_tab("review")
         tab.label = f"Review ({n})" if n else "Review"
 
     @on(DataTable.RowHighlighted, "#change-table")
     def show_diff(self, event: DataTable.RowHighlighted) -> None:
-        change = next((c for c in self.pending if c.path == event.row_key.value), None)
+        self.show_diff_of(event.row_key.value)
+
+    def show_diff_of(self, path: str) -> None:
+        change = next((c for c in self.pending if c.path == path), None)
         if change is None:
             return
         body = review.diff(self.project, change)
         text = Text()
+        if note := self.marks.get(change.path, {}).get("comment"):
+            text.append("✎ your comment\n", "bold yellow")
+            text.append(note + "\n\n", "yellow")
         if change.code == "??":
             text.append(f"new file {change.path}\n\n", "bold green")
             text.append(body)
@@ -1134,51 +1152,108 @@ class FactoryApp(App):
 
         self.push_screen(DecideScreen(d), done)
 
-    def action_approve(self) -> None:
-        if self._tab() != "review" or not self.pending:
+    def refresh_review_bar(self) -> None:
+        bar = self.query_one("#review-bar", Static)
+        if not self.pending:
+            bar.display = False
             return
-        here = [c for c in self.pending if c.element == self.element_path]
+        bar.display = True
+        verdicts = [m.get("verdict") for m in self.marks.values()]
+        comments = sum(1 for m in self.marks.values() if m.get("comment"))
+        open_ = sum(1 for c in self.pending if not self.marks.get(c.path, {}).get("verdict"))
+        bar.update(Text.assemble(
+            (f"✓ {verdicts.count(review.ACCEPT)} accepted", "green"), "  ",
+            (f"✗ {verdicts.count(review.REJECT)} rejected", "red"), "  ",
+            (f"✎ {comments} comment(s)", "yellow"), "  ", (f"· {open_} to review", "bold"),
+            ("   S submits the review", "dim")))
 
-        def done(result) -> None:
-            if not result:
-                return
-            scope, message = result
-            paths = [c.path for c in (here if scope == "element" else self.pending)]
-            try:
-                head = review.approve(self.project, paths, message)
-            except ProjectError as e:
-                self.notify(str(e), severity="error", timeout=8)
-                return
-            self.notify(f"Approved {len(paths)} file(s): {head}")
-            self.celebrate()
-            self.refresh_all()
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        """The review keys only exist on the Review tab, where `c` comments instead of
+        cancelling a run."""
+        try:
+            in_review = self._tab() == "review"
+        except Exception:
+            return True
+        if action in ("mark", "comment", "accept_rest", "submit_review"):
+            return in_review and bool(self.pending)
+        if action == "cancel_run":
+            return not in_review
+        return True
 
-        self.push_screen(ApproveScreen(review.title(self.project), len(self.pending),
-                                       len(here), self.element.title), done)
+    def change_mark(self, path: str, **values) -> None:
+        m = self.marks.setdefault(path, {})
+        m.update(values)
+        review.save_marks(self.project, self.marks)
 
-    def action_reject(self) -> None:
-        if self._tab() != "review":
+    def action_mark(self, verdict: str) -> None:
+        """Accept or reject the file under the cursor (again to undo), then go to the next."""
+        path = self._row_key("#change-table")
+        if not path:
             return
+        same = self.marks.get(path, {}).get("verdict") == verdict
+        self.change_mark(path, verdict=None if same else verdict)
+        table = self.query_one("#change-table", DataTable)
+        row = table.cursor_row
+        self.refresh_review()
+        if not same:
+            table.move_cursor(row=min(row + 1, table.row_count - 1))
+
+    def action_accept_rest(self) -> None:
+        """Accept every file not yet marked and without a comment asking for changes."""
+        rest = [c.path for c in self.pending
+                if not self.marks.get(c.path, {}).get("verdict")
+                and not self.marks.get(c.path, {}).get("comment")]
+        for path in rest:
+            self.marks.setdefault(path, {})["verdict"] = review.ACCEPT
+        review.save_marks(self.project, self.marks)
+        self.notify(f"Accepted {len(rest)} file(s); S submits the review")
+        self.refresh_review()
+
+    def action_comment(self) -> None:
         path = self._row_key("#change-table")
         if not path:
             return
 
-        def go(ok: bool | None) -> None:
-            if not ok:
+        def done(text: str | None) -> None:
+            if text is not None:
+                self.change_mark(path, comment=text)
+                self.refresh_review()
+                self.show_diff_of(path)
+
+        self.push_screen(CommentScreen(path, self.marks.get(path, {}).get("comment", "")), done)
+
+    def action_submit_review(self) -> None:
+        verdicts = [m.get("verdict") for m in self.marks.values()]
+        comments = sum(1 for m in self.marks.values() if m.get("comment"))
+        accepted, rejected = verdicts.count(review.ACCEPT), verdicts.count(review.REJECT)
+        pending = len(self.pending) - accepted - rejected
+
+        def done(result: tuple[str, str] | None) -> None:
+            if result is None:
                 return
+            message, overall = result
             try:
-                review.reject(self.project, path)
+                out = review.submit(self.project, self.marks, message, overall)
             except ProjectError as e:
-                self.notify(str(e), severity="error")
+                self.notify(str(e), severity="error", timeout=8)
                 return
-            journal.record(self.project, "reject", f"Discarded the change to {path}",
-                           self.element_path)
-            self.notify(f"Discarded the change to {path}")
+            for path in out.rejected:
+                journal.record(self.project, "reject", f"Discarded the change to {path}",
+                               self.element_path)
+            done_ = [f"committed {len(out.accepted)} file(s) as {out.head}"] if out.head else []
+            done_ += [f"discarded {len(out.rejected)}"] if out.rejected else []
+            done_ += ["sent the feedback to the agent"] if out.feedback else []
+            self.notify("Review submitted: " + ", ".join(done_ or ["nothing to do"]),
+                        title="★ Reviewed" if out.head else None)
+            if out.head:
+                self.celebrate()
+            if out.feedback:
+                self.tell_agent(out.feedback)
             self.rebuild_tree()
             self.refresh_all()
 
-        self.push_screen(ConfirmScreen(f"Discard the change to {path}? This cannot be undone."),
-                         go)
+        self.push_screen(SubmitScreen(review.title(self.project), accepted, rejected, comments,
+                                      pending), done)
 
     # --- the agent pane ----------------------------------------------------------------------
 
@@ -1212,9 +1287,39 @@ class FactoryApp(App):
 
         self.run_worker(run(), group="agent")
 
+    def tell_agent(self, text: str) -> None:
+        """Hand a message to the agent: the selected element's if it runs, else the one
+        that is running, else a new one on the selected element. It waits for a busy agent's
+        turn to end."""
+        alive = [s for s in self.lives.values() if s.state not in (live.FAILED, live.STOPPED)]
+        session = self.lives.get(self.element_path)
+        if session not in alive:
+            session = alive[0] if len(alive) == 1 else None
+        if session is None:
+            p, e = self.project, self.element
+            agent.ensure_files(p)
+            session = self.lives[e.path] = live.Live(p, e.path, live.default_name(p),
+                                                     self.agent_changed)
+            journal.record(p, "agent", f"{session.title} on {e.title}: review feedback", e.path)
+        if session.element in self.elements and session.element != self.element_path:
+            self.select_element(session.element)
+        self.show_agent()
+
+        async def run() -> None:
+            if session.conn is None:
+                await session.start()
+            while session.state in (live.WORKING, live.ASKING, live.STARTING):
+                await asyncio.sleep(0.5)
+            if session.state == live.READY:
+                await session.send(text)
+
+        self.run_worker(run(), group="agent")
+
     def agent_changed(self, session: live.Live) -> None:
         """Called by a session on every update: mark the panes for the next redraw, and say
         at once when the agent asks something."""
+        if not self.query("#project-line"):
+            return  # the app is closing; the session is being shut down
         self._agent_dirty = True
         before = self._agent_states.get(session.element)
         self._agent_states[session.element] = session.state

@@ -171,23 +171,32 @@ async def test_review_tab_decide_approve_reject(make):
         await pilot.pause()
         assert decisions.get(p, "D001").chosen == "A"
 
+        use_fake_agent()
         app.query_one("#change-table").focus()
         table = app.query_one("#change-table")
-        table.move_cursor(row=[c.path for c in app.pending].index("scratch.txt"))
+        paths = [c.path for c in app.pending]
+        table.move_cursor(row=paths.index("scratch.txt"))
         await pilot.press("x")
+        table.move_cursor(row=paths.index("concept/sketch.md"))
+        await pilot.press("c")
         await pilot.pause()
-        await pilot.press("y")  # confirm the discard
+        app.screen.query_one("TextArea").text = "Add the orbit figure"
+        await pilot.press("ctrl+s")
+        await pilot.press("Y", "S")  # accept the rest, submit
         await pilot.pause()
+        assert app.screen.__class__.__name__ == "SubmitScreen"
+        app.screen.query_one("#message").value = "Orbit decided"
+        await pilot.press("ctrl+s")
+        for _ in range(50):
+            await pilot.pause(0.1)
+            sent = [e.text for s in app.lives.values() for e in s.entries if e.kind == "user"]
+            if sent:
+                break
         assert not (p.root / "scratch.txt").exists()
-
-        await pilot.press("y")  # approve
-        await pilot.pause()
-        assert app.screen.__class__.__name__ == "ApproveScreen"
-        app.screen.query_one("#message").value = "Orbit decided, first sketch"
-        await pilot.press("enter")
-        await pilot.pause()
-        assert review.changes(p) == []
-        assert p.git("log", "-1", "--format=%s") == "Orbit decided, first sketch"
+        assert [c.path for c in review.changes(p)] == ["concept/sketch.md"]
+        assert p.git("log", "-1", "--format=%s") == "Orbit decided"
+        assert "concept/sketch.md: Add the orbit figure" in sent[0]
+        assert "Discarded: scratch.txt" in sent[0]
 
 
 async def test_agent_dialog_continues_last_session(make, monkeypatch):

@@ -222,38 +222,73 @@ class ConfirmScreen(ModalScreen[bool]):
         self.dismiss(True)
 
 
-class ApproveScreen(ModalScreen[tuple[str, str] | None]):
-    """Commit pending work: a message (from the proposal) and the scope."""
+class CommentScreen(ModalScreen[str | None]):
+    """A comment on one file of the agent's proposal: what to change, for the agent."""
 
-    BINDINGS = [Binding("escape", "dismiss(None)", "Close")]
+    BINDINGS = [Binding("escape", "dismiss(None)", "Close"),
+                Binding("ctrl+s", "save", "Save", priority=True)]
 
-    def __init__(self, title: str, n_all: int, n_here: int, element: str) -> None:
+    def __init__(self, path: str, text: str = "") -> None:
         super().__init__()
-        self.title_text, self.n_all, self.n_here, self.element = title, n_all, n_here, element
+        self.path, self.text = path, text
 
     def compose(self) -> ComposeResult:
-        with Vertical(classes="dialog"):
-            yield Label("Approve changes", classes="dialog-title")
-            yield Label("Commit message")
-            yield Input(value=self.title_text, placeholder="What this change does", id="message")
-            yield Button(f"Approve all ({self.n_all} files)", variant="primary", id="all")
-            if self.n_here and self.n_here != self.n_all:
-                yield Button(f"Approve {self.element} only ({self.n_here} files)", id="element")
+        with Vertical(classes="dialog wide"):
+            yield Label("Comment", classes="dialog-title")
+            yield Static(Text.assemble(("on ", "dim"), self.path), classes="hint")
+            yield TextArea(self.text, id="comment", classes="comment")
+            yield Static("What should change? The agent gets it when you submit the review. "
+                         "ctrl+s saves; empty removes the comment.", classes="hint")
+            yield Button("Save comment", variant="primary", id="save")
 
-    @on(Button.Pressed)
-    def pressed(self, event: Button.Pressed) -> None:
-        self.finish(event.button.id)
+    def on_mount(self) -> None:
+        self.query_one(TextArea).focus()
 
+    @on(Button.Pressed, "#save")
+    def action_save(self) -> None:
+        self.dismiss(self.query_one(TextArea).text.strip())
+
+
+class SubmitScreen(ModalScreen[tuple[str, str] | None]):
+    """Submit the review: what gets committed, discarded and sent back to the agent."""
+
+    BINDINGS = [Binding("escape", "dismiss(None)", "Close"),
+                Binding("ctrl+s", "submit", "Submit", priority=True)]
+
+    def __init__(self, title: str, accepted: int, rejected: int, comments: int,
+                 pending: int) -> None:
+        super().__init__()
+        self.title_text = title
+        self.counts = accepted, rejected, comments, pending
+
+    def compose(self) -> ComposeResult:
+        accepted, rejected, comments, pending = self.counts
+        with Vertical(classes="dialog wide"):
+            yield Label("Submit review", classes="dialog-title")
+            yield Static(Text.assemble(
+                (f"✓ {accepted} accepted", "green"), " will be committed   ",
+                (f"✗ {rejected} rejected", "red"), " will be discarded\n",
+                (f"✎ {comments} comment(s)", "yellow"), " go to the agent   ",
+                (f"{pending} file(s)", "bold"), " stay pending"))
+            if accepted:
+                yield Label("Commit message")
+                yield Input(value=self.title_text, placeholder="What this change does",
+                            id="message")
+            yield Label("Overall feedback for the agent (optional)")
+            yield TextArea(id="overall", classes="comment")
+            yield Button("Submit review", variant="primary", id="submit")
+            yield Static("ctrl+s submits · esc goes back to the files", classes="hint")
+
+    @on(Button.Pressed, "#submit")
     @on(Input.Submitted)
-    def submitted(self) -> None:
-        self.finish("all")
-
-    def finish(self, scope: str) -> None:
-        message = self.query_one("#message", Input).value.strip()
-        if not message:
-            self.notify("Write a commit message", severity="warning")
+    def action_submit(self) -> None:
+        found = self.query("#message")
+        message = found.first(Input).value.strip() if found else ""
+        if self.counts[0] and not message:
+            self.notify("Accepted files are committed: write a commit message",
+                        severity="warning")
             return
-        self.dismiss((scope, message))
+        self.dismiss((message, self.query_one("#overall", TextArea).text.strip()))
 
 
 class DecideScreen(ModalScreen[tuple[str, str | None, str] | None]):
@@ -371,12 +406,13 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 | `ctrl+p` | command palette: every action by name |
 | `a` | agent: start (or show) this element's agent in the pane, briefed on it |
 | `ctrl+a` | show, focus or hide the agent pane; `esc` in it stops the agent |
-| `y` / `n` / `s` | when the agent asks: allow / deny / always allow that command this session |
+| `y` `n` `s` | agent asks: allow, deny, always allow that command (`↑↓` scroll it) |
 | `A` | Claude Code in its own terminal window instead (continue, fork, new) |
 | `7` | Agent: this element's conversation, full size |
 | `8` | Review: the agent's proposal, its changes (diff) and open decisions |
 | `9` | Journal: approvals, locks, decisions, runs and gates passed, newest first |
-| `y` / `x` | approve (commit) / discard pending changes (Review tab) |
+| `y` / `x` / `c` | Review: accept / reject / comment on the file (`Y` accepts the rest) |
+| `S` | Review: submit — commit accepted, discard rejected, send comments to the agent |
 | `enter` | answer the selected decision (Review tab) |
 | `ctrl+o` / `ctrl+r` | switch project / reload |
 
