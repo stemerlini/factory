@@ -12,7 +12,17 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Markdown, OptionList, Select, Static, TextArea
+from textual.widgets import (
+    Button,
+    DataTable,
+    Input,
+    Label,
+    Markdown,
+    OptionList,
+    Select,
+    Static,
+    TextArea,
+)
 from textual.widgets.option_list import Option
 
 from .. import agent, config, portal
@@ -345,7 +355,7 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 
 | Key | |
 |---|---|
-| `1`…`9`, `0` | tabs: Home, Gates, Requirements, Architecture, Studies, … Journal, Agent |
+| `1`…`9` | Home, Gates, Requirements, Architecture, Studies, Files, Agent, Review, Journal |
 | `enter` | on Home: go to what waits on you, or to an element's next step |
 | `space` | on a Gates item: do it (open the file, dialog or tab it needs) |
 | `a` | on a Gates item: hand that gate to an agent, with its playbook |
@@ -357,10 +367,13 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 | `d` | decompose the selected block into a subsystem (Architecture tab) |
 | `L` | lock the element (needs a commit and proven analysis) |
 | `c` | cancel the selected run |
+| `m` | modules: which tools are installed and enabled |
+| `ctrl+p` | command palette: every action by name |
 | `a` | agent: start (or show) this element's agent in the pane, briefed on it |
 | `ctrl+a` | show, focus or hide the agent pane; `esc` in it stops the agent |
 | `y` / `n` / `s` | when the agent asks: allow / deny / always allow that command this session |
 | `A` | Claude Code in its own terminal window instead (continue, fork, new) |
+| `7` | Agent: this element's conversation, full size |
 | `8` | Review: the agent's proposal, its changes (diff) and open decisions |
 | `9` | Journal: approvals, locks, decisions, runs and gates passed, newest first |
 | `y` / `x` | approve (commit) / discard pending changes (Review tab) |
@@ -371,6 +384,42 @@ Gates: ✓ done · ◐ in progress · ○ to do · – skipped · ● unlocked b
 Studies: ✓ up to date · ● stale · ○ never ran · ⟳ running · ✗ failed.
 Requirements: ✓ pass · ✗ fail · ● stale · ◌ pending · ○ open.
 """
+
+
+class ModulesScreen(ModalScreen[None]):
+    """The modules Factory knows, which this project enables, and whether their tools are
+    installed: setup, not daily work, so it lives behind `m` rather than in a tab."""
+
+    BINDINGS = [Binding("escape,q,m", "dismiss(None)", "Close")]
+
+    def __init__(self, enabled: set[str]) -> None:
+        super().__init__()
+        self.enabled = enabled
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="dialog modules"):
+            yield Label("Modules", classes="dialog-title")
+            yield Static("● enabled in this project · ○ available · yellow: a tool is missing",
+                         classes="hint")
+            yield DataTable(id="module-table", cursor_type="row")
+
+    def on_mount(self) -> None:
+        table = self.query_one(DataTable)
+        table.add_columns("", "Module", "Kinds", "Tasks", "Tools · viewers", "Health")
+        for m in registry.all_modules().values():
+            health = m.health()
+            ok = all(c.ok for c in health)
+            tasks = [f"{m.id}.{t.id}" if t.id != "main" else m.id for t in m.tasks]
+            extras = [t.title for t in m.tools] + [f"{v.title} (view)" for v in m.viewers]
+            table.add_row(
+                Text("●" if m.id in self.enabled else "○", "green" if ok else "yellow"),
+                Text.assemble((m.title, "bold"), "\n", (m.description, "dim")),
+                "\n".join(f"{k.icon} {k.id}" for k in m.kinds) or "-",
+                "\n".join(tasks) or "-", "\n".join(extras) or "-",
+                Text("\n".join(f"{'✓' if c.ok else '✗'} {c.name}: {c.detail}" for c in health)
+                     or "✓", "green" if ok else "yellow"),
+                height=max(2, len(health), len(tasks), len(extras), len(m.kinds)), key=m.id)
+        table.focus()
 
 
 class HelpScreen(ModalScreen[None]):

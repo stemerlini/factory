@@ -358,7 +358,7 @@ handover or weekly note that can go to the Obsidian vault.
 4. ✓ **Kickoff**: the idea in the New Project dialog (or `factory new --idea`) becomes the
    system description; `.factory/kickoff` makes the first open start the agent on the
    kickoff playbook (interview, then description, requirements, architecture, decisions).
-5. **Fun & layout**: celebrations, journey, tab regroup, command palette.
+5. ✓ **Fun & layout**: celebrations, journey, tab regroup, command palette.
 
 Each step is tested, usable on its own, and pushed when green.
 

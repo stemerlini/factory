@@ -22,6 +22,10 @@ async def test_tui_elements_tabs_and_new_study(make):
         assert app.query_one("#study-table", DataTable).row_count == 2
         assert app.query_one("#run-table", DataTable).row_count == 1
         assert app.query_one("#block-table", DataTable).row_count == 3
+        await pilot.press("m")
+        await pilot.pause()
+        assert app.screen.query_one("#module-table", DataTable).row_count > 0
+        await pilot.press("escape")
         app.query_one("#elements", Tree).focus()
         await pilot.press("down")  # Front-end electronics
         await pilot.pause()

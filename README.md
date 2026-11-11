@@ -13,6 +13,14 @@ design data in the project's git repo.
 
 See [PLAN.md](PLAN.md) for the vision, the model and the phases.
 
+<p align="center"><img src="assets/screenshot.png" alt="Factory's Home tab: what waits on you, next steps and the journey of each element" width="100%"></p>
+
+Tabs: **Home** · Gates · Requirements · Architecture · **Studies** (each study's runs, outputs
+and log beside it) · Files · **Agent** · Review · Journal, on `1`…`9`. `m` shows the modules
+and whether their tools are installed; `Ctrl+P` finds any action by name; `?` lists the keys.
+Passing a gate, locking a baseline or approving a proposal makes the factory in the top bar
+puff smoke and light its windows.
+
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/factory templates
@@ -80,7 +88,7 @@ same from the command line; the kickoff starts when Factory first opens the proj
 The agent works inside Factory. Press `a` and the selected element's agent starts in the
 **agent pane**, briefed on the element (on a Gates item: on that gate, with its playbook).
 The pane is a drawer beside any tab (`Ctrl+A` shows, focuses and hides it) and the
-**Agent** tab (`0`). Each element keeps its own conversation; reopen Factory and `a` picks
+**Agent** tab (`7`). Each element keeps its own conversation; reopen Factory and `a` picks
 it up where it was.
 
 Any agent that speaks the [Agent Client Protocol](https://agentclientprotocol.com) works:

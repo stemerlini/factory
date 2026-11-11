@@ -76,6 +76,23 @@ Screen {
 #block-table {
     height: 10;
 }
+#study-body {
+    height: 12;
+    padding: 0;
+}
+#study-detail {
+    width: 1fr;
+    padding: 0 1;
+}
+#run-table {
+    width: 1fr;
+    height: 1fr;
+    border-left: solid $primary 20%;
+}
+#run-body {
+    height: 10;
+    padding: 0;
+}
 #output-tree {
     width: 40;
     background: $background;
@@ -98,14 +115,15 @@ DataTable {
     height: 1fr;
     background: $background;
 }
+.dialog.modules {
+    width: 92%;
+    height: 90%;
+}
 .detail {
     height: 12;
     border-top: solid $primary 20%;
     padding: 0 1;
     background: $background;
-}
-#study-detail {
-    height: 14;
 }
 
 /* -- files ---------------------------------------------------------------- */

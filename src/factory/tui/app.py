@@ -8,14 +8,17 @@ import os
 import shlex
 import shutil
 import subprocess
+from collections.abc import Iterable
+from functools import partial
 from pathlib import Path
 
 from rich.markup import escape
 from rich.text import Text
 from textual import on, work
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, SystemCommand
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.screen import Screen
 from textual.widgets import (
     DataTable,
     DirectoryTree,
@@ -58,6 +61,7 @@ from .screens import (
     ConfirmScreen,
     DecideScreen,
     HelpScreen,
+    ModulesScreen,
     NewStudyScreen,
     ProjectPicker,
 )
@@ -86,8 +90,8 @@ GATE_STYLE = {
 }
 RUN_STYLE = {"done": "green", "failed": "red", "running": "cyan", "queued": "cyan",
              "cancelled": "yellow"}
-TABS = ("home", "gates", "requirements", "architecture", "studies", "results", "files",
-        "review", "journal", "agent")
+TABS = ("home", "gates", "requirements", "architecture", "studies", "files", "agent", "review",
+        "journal")
 WAITING_MARK = {"review": ("●", "magenta"), "decision": ("?", "yellow"), "failed": ("✗", "red"),
                 "stale": ("●", "yellow"), "unlocked": ("◆", "red"), "problem": ("!", "red"),
                 "agent": ("?", "bold magenta")}
@@ -121,6 +125,7 @@ class FactoryApp(App):
         Binding("d", "decompose", "Decompose", show=False),
         Binding("L", "lock", "Lock", show=False),
         Binding("c", "cancel_run", "Cancel run", show=False),
+        Binding("m", "modules", "Modules", show=False),
         Binding("ctrl+o", "pick_project", "Projects"),
         Binding("ctrl+r", "refresh", "Reload", show=False),
         *(Binding(str(i % 10), f"tab('{t}')", t.title(), show=False)
@@ -202,16 +207,18 @@ class FactoryApp(App):
                         yield DataTable(id="block-table", cursor_type="row", classes="detail")
                     with TabPane("Studies", id="studies"):
                         yield DataTable(id="study-table", cursor_type="row", zebra_stripes=True)
-                        yield Static(id="study-detail", classes="detail")
-                    with TabPane("Results", id="results"):
-                        yield DataTable(id="run-table", cursor_type="row", zebra_stripes=True)
-                        with Horizontal(classes="detail"):
+                        with Horizontal(id="study-body", classes="detail"):
+                            yield Static(id="study-detail")
+                            yield DataTable(id="run-table", cursor_type="row")
+                        with Horizontal(id="run-body", classes="detail"):
                             yield Tree("outputs", id="output-tree")
                             yield Log(id="run-log", highlight=True)
                     with TabPane("Files", id="files"):
                         with Horizontal():
                             yield DirectoryTree(".", id="file-tree")
                             yield VerticalScroll(Static(id="file-preview"), id="file-scroll")
+                    with TabPane("Agent", id="agent"):
+                        yield AgentPane(id="agent-tab")
                     with TabPane("Review", id="review"):
                         yield Markdown(id="proposal")
                         with Horizontal(id="review-body"):
@@ -222,10 +229,6 @@ class FactoryApp(App):
                     with TabPane("Journal", id="journal"):
                         yield DataTable(id="journal-table", cursor_type="row",
                                         zebra_stripes=True)
-                    with TabPane("Agent", id="agent"):
-                        yield AgentPane(id="agent-tab")
-                    with TabPane("Modules", id="modules"):
-                        yield DataTable(id="module-table", cursor_type="row")
             yield AgentPane(id="drawer")
         yield Footer()
 
@@ -243,9 +246,7 @@ class FactoryApp(App):
         self.query_one("#study-table", DataTable).add_columns(
             "", "Id", "Title", "Task", "Gate", "Last run", "Why")
         self.query_one("#run-table", DataTable).add_columns(
-            "", "Run", "Study", "Status", "Commit", "Toolchain", "Metrics")
-        self.query_one("#module-table", DataTable).add_columns(
-            "", "Module", "Kinds", "Tasks", "Tools · viewers", "Health")
+            "", "Run", "Status", "Metrics", "Commit")
         self.query_one("#change-table", DataTable).add_columns("", "Change", "Element", "File")
         self.query_one("#decision-table", DataTable).add_columns(
             "", "Decision", "Title", "By", "Recommended", "Chosen")
@@ -278,7 +279,6 @@ class FactoryApp(App):
         self.element_path = ""
         self.rebuild_tree()
         self.refresh_all()
-        self.refresh_modules()
         self.kickoff()
 
     def kickoff(self) -> None:
@@ -343,6 +343,7 @@ class FactoryApp(App):
         for event in journal.passed_gates(self.project, self.gate_states,
                                           {p: e.title for p, e in self.elements.items()}):
             self.notify(event.title, title="★ Gate passed", timeout=6)
+            self.celebrate()
         self.refresh_topbar()
         self.refresh_tree_labels()
         self.refresh_element()
@@ -388,6 +389,17 @@ class FactoryApp(App):
         self.refresh_log()
 
     # --- top, tree, gates --------------------------------------------------------------------
+
+    def celebrate(self) -> None:
+        """A moment of life in the top-bar factory: smoke puffs and the windows light up."""
+        frames = iter(range(12))
+
+        def step() -> None:
+            i = next(frames, None)
+            art = logo.cheer(i) if i is not None else logo.FACTORY
+            self.query_one("#brand-logo", Static).update(logo.render(art))
+
+        self.set_interval(0.2, step, repeat=13)
 
     def refresh_topbar(self) -> None:
         p = self.project
@@ -697,42 +709,24 @@ class FactoryApp(App):
             table.move_cursor(row=min(keep, table.row_count - 1))
 
     def refresh_runs(self) -> None:
+        """The runs of the highlighted study, newest first, beside its details."""
         table = self.query_one("#run-table", DataTable)
         keep = table.cursor_row
         table.clear()
-        found = sorted((r for s in self.states.values() if s.study.element == self.element_path
-                        for r in runs.history(self.project, s.study)),
+        st = self.states.get(self._row_key("#study-table") or "")
+        found = sorted(runs.history(self.project, st.study) if st else [],
                        key=lambda r: r.id, reverse=True)
         for r in found:
             table.add_row(
-                mark("●", RUN_STYLE.get(r.status, "")), r.id, r.study,
+                mark("●", RUN_STYLE.get(r.status, "")), r.id,
                 r.status + (f" ({r.error})" if r.error else ""),
-                (r.commit or "-") + ("+" if r.dirty else ""),
-                " ".join(f"{k} {v}" for k, v in r.toolchain.items()),
-                " ".join(f"{k}={m.value:.4g}" for k, m in r.metrics.items()), key=r.id)
+                " ".join(f"{k}={m.value:.4g}" for k, m in r.metrics.items()),
+                Text((r.commit or "-")[:8] + ("+" if r.dirty else ""), "dim"), key=r.id)
         if table.row_count:
             table.move_cursor(row=min(keep, table.row_count - 1))
         else:
             self.query_one("#run-log", Log).clear()
             self.query_one("#output-tree", Tree).clear()
-
-    def refresh_modules(self) -> None:
-        table = self.query_one("#module-table", DataTable)
-        table.clear()
-        enabled = set(self.project.modules) if self.project else set()
-        for m in registry.all_modules().values():
-            health = m.health()
-            ok = all(c.ok for c in health)
-            tasks = [f"{m.id}.{t.id}" if t.id != "main" else m.id for t in m.tasks]
-            extras = [t.title for t in m.tools] + [f"{v.title} (view)" for v in m.viewers]
-            table.add_row(
-                mark("●" if m.id in enabled else "○", "green" if ok else "yellow"),
-                Text.assemble((m.title, "bold"), "\n", (m.description, "dim")),
-                "\n".join(f"{k.icon} {k.id}" for k in m.kinds) or "-",
-                "\n".join(tasks) or "-", "\n".join(extras) or "-",
-                Text("\n".join(f"{'✓' if c.ok else '✗'} {c.name}: {c.detail}" for c in health)
-                     or "✓", "green" if ok else "yellow"),
-                height=max(2, len(health), len(tasks), len(extras), len(m.kinds)), key=m.id)
 
     # --- details ----------------------------------------------------------------------------
 
@@ -767,7 +761,11 @@ class FactoryApp(App):
             text.append("\nmetrics   ", "bold")
             text.append("  ".join(f"{k} = {m.value:.4g} {m.unit}"
                                   for k, m in st.good.metrics.items()))
+        if st.last and st.last.toolchain:
+            text.append(f"\ntoolchain {' '.join(f'{k} {v}' for k, v in st.last.toolchain.items())}",
+                        "dim")
         self.query_one("#study-detail", Static).update(text)
+        self.refresh_runs()
 
     @on(DataTable.RowHighlighted, "#run-table")
     def show_run(self, event: DataTable.RowHighlighted) -> None:
@@ -836,6 +834,30 @@ class FactoryApp(App):
     def action_tab(self, tab: str) -> None:
         self.query_one("#tabs", TabbedContent).active = tab
 
+    def action_modules(self) -> None:
+        self.push_screen(ModulesScreen(set(self.project.modules) if self.project else set()))
+
+    def get_system_commands(self, screen: Screen) -> Iterable[SystemCommand]:
+        """Every action by name in the command palette (ctrl+p), beside Textual's own."""
+        yield from super().get_system_commands(screen)
+        for tab in TABS:
+            yield SystemCommand(f"Go to {tab.title()}", f"Show the {tab.title()} tab",
+                                partial(self.action_tab, tab))
+        for name, help_, action in (
+            ("Agent: work on this element", "Start or show the element's agent in the pane",
+             self.action_agent),
+            ("Agent: toggle the pane", "Show, focus or hide the agent drawer", self.action_drawer),
+            ("Agent in its own window", "Claude Code in a terminal window",
+             self.action_agent_window),
+            ("Run the selected study", "Runs in the background", self.action_run_study),
+            ("New study", "Add a study to this element", self.action_new_study),
+            ("Lock this element", "Baseline it with a git tag", self.action_lock),
+            ("Switch project", "Open, or create from a template", self.action_pick_project),
+            ("Modules", "Installed tools and what this project enables", self.action_modules),
+            ("Reload", "Re-read the project from disk", self.action_refresh),
+        ):
+            yield SystemCommand(name, help_, action)
+
     def action_refresh(self) -> None:
         if self.project:
             path = self.element_path
@@ -903,11 +925,15 @@ class FactoryApp(App):
         except ProjectError as e:
             self.notify(str(e), severity="warning", timeout=8)
             return
-        self.notify(f"Locked {self.element.title}: {tag}")
+        self.notify(f"{self.element.title} is baselined as {tag}", title="★ Locked", timeout=6)
+        self.celebrate()
         self.refresh_all()
 
     def target_path(self) -> Path | None:
         tab = self._tab()
+        if tab == "studies" and self.focused is self.query_one("#output-tree", Tree):
+            node = self.query_one("#output-tree", Tree).cursor_node
+            return node.data if node and node.data else None
         if tab == "studies" and (key := self._row_key("#study-table")):
             return self.project.study(key).dir / "study.toml"
         if tab == "requirements" and (rid := self._row_key("#req-table")):
@@ -920,10 +946,6 @@ class FactoryApp(App):
             node = self.query_one("#file-tree", DirectoryTree).cursor_node
             if node and node.data:
                 return node.data.path
-        if tab == "results":
-            node = self.query_one("#output-tree", Tree).cursor_node
-            if node and node.data:
-                return node.data
         return None
 
     def action_edit(self) -> None:
@@ -1128,6 +1150,7 @@ class FactoryApp(App):
                 self.notify(str(e), severity="error", timeout=8)
                 return
             self.notify(f"Approved {len(paths)} file(s): {head}")
+            self.celebrate()
             self.refresh_all()
 
         self.push_screen(ApproveScreen(review.title(self.project), len(self.pending),

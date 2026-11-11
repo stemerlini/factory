@@ -17,6 +17,7 @@ PALETTE = {
     "s": "#B9B4C8",  # smoke
     "m": "#8C86A3",  # smoke in shadow
     "K": "#141414",  # door
+    "W": "#FFF3B0",  # windows lit up, when something good happened
 }
 
 # The banner's factory at Citadel's size: 15 x 8 pixels, four terminal rows.
@@ -30,6 +31,19 @@ YSSLLYSSLLYSSLL
 YSOOSYSKKSYSOOS
 dddddddKKdddddd
 """
+
+# Smoke rows for a celebration: puffs rise and drift, a few frames on a loop.
+PUFFS = ("s.m.ss.m.......", ".ss..m.ss......", "m..s.ms..s.....", ".sm.s.sm.s.....")
+
+
+def cheer(frame: int) -> str:
+    """The factory celebrating: puffing smoke, windows flashing between gold and white."""
+    rows = sprite()
+    rows[0] = PUFFS[frame % len(PUFFS)]
+    lit = "W" if frame % 2 else "Y"
+    rows[6] = rows[6].replace("O", lit)
+    return "\n".join(rows)
+
 
 def sprite(art: str = FACTORY) -> list[str]:
     rows = art.strip().splitlines()
