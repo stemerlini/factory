@@ -49,7 +49,7 @@ from .. import (
 from ..model import GATES as GATES_ORDER
 from ..model import Element
 from ..modules import registry
-from ..project import Project, ProjectError
+from ..project import KICKOFF, Project, ProjectError
 from . import logo
 from .agentpane import AgentPane, Question
 from .screens import (
@@ -279,6 +279,27 @@ class FactoryApp(App):
         self.rebuild_tree()
         self.refresh_all()
         self.refresh_modules()
+        self.kickoff()
+
+    def kickoff(self) -> None:
+        """A project created with an idea opens with the agent interviewing the user."""
+        marker = self.project.root / KICKOFF
+        try:
+            idea = marker.read_text()
+            marker.unlink()
+        except OSError:
+            return
+        p = self.project
+        session = self.lives[""] = live.Live(p, "", live.default_name(p), self.agent_changed)
+        journal.record(p, "agent", f"{session.title} kicks off {p.name}")
+        self.action_tab("agent")
+
+        async def run() -> None:
+            await session.start()
+            if session.state == live.READY:
+                await session.send(agent.kickoff_brief(p, idea))
+
+        self.run_worker(run(), group="agent")
 
     def rebuild_tree(self) -> None:
         try:

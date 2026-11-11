@@ -88,6 +88,8 @@ Everything you create is a **draft** (`status: draft`).
 - **In Factory's agent pane** Factory answers your permission requests: reads and edits
   inside the project pass, commands are asked, and committing, locking and deciding are
   refused. Don't retry a refused command another way; say what the user should do.
+- **Kickoff.** A brief that starts "We are starting a new Factory project" carries the
+  kickoff playbook: interview first, write nothing until the user has answered.
 - **Playbooks.** When your brief names a gate, follow its playbook. A project can
   override one in `playbooks/<gate>.md`.
 - **Change** files per FORMATS.md, then `factory check`. A changed input makes its

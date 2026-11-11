@@ -268,10 +268,15 @@ def templates() -> dict[str, str]:
     return dict(sorted(found.items()))
 
 
+KICKOFF = ".factory/kickoff"
+
+
 def create(target: Path, template: str = "hardware", name: str | None = None,
-           project_id: str | None = None, git: bool = True) -> Project:
+           project_id: str | None = None, git: bool = True, idea: str = "") -> Project:
     """Make a new project from a template: a name under ``factory/templates``, or the path
-    of any folder laid out like one."""
+    of any folder laid out like one. With an ``idea``, it becomes the system's description
+    and the project is marked for a kickoff: the first time Factory opens it, the agent
+    interviews the user and drafts the rest from it."""
     target = target.expanduser().resolve()
     if target.exists() and any(target.iterdir()):
         raise ProjectError(f"{target} exists and is not empty")
@@ -288,6 +293,13 @@ def create(target: Path, template: str = "hardware", name: str | None = None,
     data["project"]["template"] = Path(template).name
     manifest.write_text(tomli_w.dumps(data))
     (target / ".gitignore").write_text(".factory/\n__pycache__/\n")
+    if idea.strip():
+        root_md = target / "element.md"
+        meta, _ = read_frontmatter(root_md)
+        root_md.write_text("---\n" + yaml.safe_dump(meta, sort_keys=False, allow_unicode=True)
+                           + "---\n" + idea.strip() + "\n")
+        (target / KICKOFF).parent.mkdir(exist_ok=True)
+        (target / KICKOFF).write_text(idea.strip() + "\n")
     from . import agent
 
     for rel, text in agent.GUARDRAILS:

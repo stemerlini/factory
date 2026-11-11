@@ -355,7 +355,9 @@ handover or weekly note that can go to the Obsidian vault.
 3. ✓ **ACP client + Agent pane + guardrails**: `acp.py` (client and policy), `live.py`
    (one session per element, resumed with `session/load`), the pane as drawer and tab;
    `AGENTS.md`; `factory skill install`. Tried against Copilot and the Claude adapter.
-4. **Kickoff.**
+4. ✓ **Kickoff**: the idea in the New Project dialog (or `factory new --idea`) becomes the
+   system description; `.factory/kickoff` makes the first open start the agent on the
+   kickoff playbook (interview, then description, requirements, architecture, decisions).
 5. **Fun & layout**: celebrations, journey, tab regroup, command palette.
 
 Each step is tested, usable on its own, and pushed when green.

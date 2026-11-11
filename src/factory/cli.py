@@ -44,7 +44,8 @@ def load(args: argparse.Namespace) -> Project:
 
 def cmd_new(args):
     target = Path(args.path) if "/" in args.path else config.projects_root() / args.path
-    p = create(target, args.template, args.name, args.id, git=not args.no_git)
+    p = create(target, args.template, args.name, args.id, git=not args.no_git,
+               idea=args.idea or "")
     config.remember(p.root)
     out(args, {"root": p.root, "id": p.id, "template": p.template},
         f"Created {p.name} ({p.id}) from {p.template} in {p.root}")
@@ -508,6 +509,8 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--name")
     p.add_argument("--id")
     p.add_argument("--no-git", action="store_true")
+    p.add_argument("--idea", help="what you want to make, in your words: becomes the system "
+                   "description, and Factory's agent opens with a kickoff interview")
     add("templates", cmd_templates, "list project templates")
     add("projects", cmd_projects, "list known projects")
     add("status", cmd_status, "project overview")

@@ -60,6 +60,16 @@ def brief(project: Project, element: Element, task: str = "", gate: str | None =
     return "\n".join(lines)
 
 
+def kickoff_brief(project: Project, idea: str) -> str:
+    """The opening message of a new project: the user's idea and how a kickoff runs."""
+    return "\n".join([
+        f"We are starting a new Factory project, \"{project.name}\", at {project.root} "
+        f"(template: {project.template}). Load the factory skill.",
+        "", "My idea:", "", idea.strip(), "",
+        "How we run the kickoff:", "", guide.playbook(project, "kickoff").strip(), "",
+        "Start with your questions; don't write anything until I have answered them."])
+
+
 def command(project: Project, element: Element, task: str = "",
             gate: str | None = None) -> list[str]:
     """``claude`` started in the project folder with the brief."""

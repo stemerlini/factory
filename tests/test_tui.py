@@ -1,7 +1,15 @@
+import sys
+from pathlib import Path
+
 from textual.widgets import DataTable, Tree
 
-from factory import runs
+from factory import config, runs
 from factory.tui.app import FactoryApp
+
+
+def use_fake_agent():
+    config.save({"agent": {"default": "fake"}, "agents": {"fake": {
+        "command": [sys.executable, str(Path(__file__).parent / "fake_acp.py")]}}})
 
 
 async def test_tui_elements_tabs_and_new_study(make):
@@ -34,6 +42,7 @@ async def test_new_project_in_a_chosen_location(tmp_path, monkeypatch):
     elsewhere = tmp_path / "work"
     elsewhere.mkdir()
     monkeypatch.setattr(portal, "choose_folder", lambda title, start: elsewhere)
+    use_fake_agent()
     app = FactoryApp(None)
     async with app.run_test(size=(150, 44)) as pilot:
         await pilot.pause()
@@ -44,10 +53,19 @@ async def test_new_project_in_a_chosen_location(tmp_path, monkeypatch):
             await pilot.pause(0.05)
             if app.screen.query_one("#location").value == str(elsewhere):
                 break
+        app.screen.query_one("#idea").text = "A camera for cubesats"
         await pilot.press("enter")
         await pilot.pause()
         assert app.project and app.project.root == elsewhere / "demo"
         assert app.screen.__class__.__name__ != "NewProjectScreen"
+        assert "A camera for cubesats" in (app.project.root / "element.md").read_text()
+        for _ in range(100):
+            await pilot.pause(0.02)
+            if app.lives[""].entries:
+                break
+        brief = app.lives[""].entries[0].text
+        assert "A camera for cubesats" in brief and "# Kickoff" in brief
+        assert not (app.project.root / ".factory/kickoff").exists()
 
 
 async def test_home_opens_what_waits(make):
@@ -87,14 +105,10 @@ async def test_gate_items_do_themselves(make, monkeypatch):
 
 
 async def test_agent_pane_asks_and_remembers(make):
-    import sys
-    from pathlib import Path
-
-    from factory import config, live
+    from factory import live
     from factory.tui.agentpane import AgentPane, Question
 
-    config.save({"agent": {"default": "fake"}, "agents": {"fake": {
-        "command": [sys.executable, str(Path(__file__).parent / "fake_acp.py")]}}})
+    use_fake_agent()
     p = make()
     app = FactoryApp(p.root)
 

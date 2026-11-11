@@ -10,9 +10,9 @@ from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Markdown, OptionList, Select, Static
+from textual.widgets import Button, Input, Label, Markdown, OptionList, Select, Static, TextArea
 from textual.widgets.option_list import Option
 
 from .. import agent, config, portal
@@ -62,10 +62,13 @@ class NewProjectScreen(ModalScreen[Path | None]):
                 Binding("ctrl+b", "browse", "Choose location")]
 
     def compose(self) -> ComposeResult:
-        with Vertical(classes="dialog"):
+        with VerticalScroll(classes="dialog wide"):
             yield Label("New project", classes="dialog-title")
             yield Label("Name")
             yield Input(placeholder="Particle telescope", id="name")
+            yield Label(Text.assemble("The idea ", ("optional: in your words. The agent asks "
+                                                    "what it needs, then drafts the rest", "dim")))
+            yield TextArea(id="idea", classes="idea")
             yield Label("Template")
             yield Select([(f"{k} — {v}", k) for k, v in templates().items()],
                          value="hardware", allow_blank=False, id="template")
@@ -125,7 +128,8 @@ class NewProjectScreen(ModalScreen[Path | None]):
         if not target.is_absolute():
             target = config.projects_root() / target
         try:
-            p = create(target, self.query_one("#template", Select).value, name or None)
+            p = create(target, self.query_one("#template", Select).value, name or None,
+                       idea=self.query_one("#idea", TextArea).text)
         except (ProjectError, OSError) as e:
             self.notify(str(e), severity="error")
             return

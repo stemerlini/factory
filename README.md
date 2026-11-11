@@ -63,10 +63,17 @@ factory agent fee -g analyse # an agent session on that gate (--print shows the 
 
 ## New projects
 
-`Ctrl+O` → *New project from a template…* asks for a name, a template and a **location**:
-type it, or press `Browse…` (`Ctrl+B`) for the desktop's folder chooser. The project gets
-its own folder, named after it, inside that location; the dialog shows the full path
-before you create it.
+`Ctrl+O` → *New project from a template…* asks for a name, **the idea**, a template and a
+**location**: type it, or press `Browse…` (`Ctrl+B`) for the desktop's folder chooser. The
+project gets its own folder, named after it, inside that location; the dialog shows the
+full path before you create it.
+
+The idea is what you want to make, in your words. It becomes the system's description, and
+the project opens with a **kickoff**: the agent interviews you (a few questions at a time),
+then drafts the description, the requirements that drive the design, a first architecture
+and the open trade-offs as decisions, all waiting for you in Review.
+`factory new cubesat-camera --idea "A 3U camera that images wildfires from LEO"` does the
+same from the command line; the kickoff starts when Factory first opens the project.
 
 ## Working with an agent
 
