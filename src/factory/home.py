@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from . import decisions, gates, journal, pipeline, review, trace
+from . import decisions, gates, guide, journal, pipeline, review, trace
 from .model import Element
 from .project import Project
 
@@ -52,7 +52,8 @@ class Home:
 
 def build(project: Project, elements: list[Element],
           states: dict[str, pipeline.StudyState],
-          gate_states: dict[str, list[gates.GateState]], recent: int = 8) -> Home:
+          gate_states: dict[str, list[gates.GateState]], recent: int = 8,
+          checks: dict[str, dict[str, list[guide.Check]]] | None = None) -> Home:
     h = Home()
     pending = review.changes(project)
     if pending:
@@ -80,7 +81,10 @@ def build(project: Project, elements: list[Element],
         gs = gate_states.get(e.path, [])
         cur = gates.current(gs)
         if cur:
-            h.steps.append(Step(e.path, e.title, cur.gate, cur.title, cur.detail))
+            todo = guide.next_check(checks[e.path], gs) if checks and e.path in checks else None
+            detail = (todo.label + (f" ({todo.detail})" if todo.detail else "")) if todo \
+                else cur.detail
+            h.steps.append(Step(e.path, e.title, cur.gate, cur.title, detail))
         h.journey.append(Row(e.path, e.title, e.path.count("/") + (1 if e.path else 0),
                              [g.status for g in gs]))
         done += sum(g.status == gates.DONE for g in gs)
@@ -98,8 +102,9 @@ def load(project: Project) -> tuple[Home, dict[str, list[gates.GateState]]]:
     traces = trace.trace(project, states)
     elements = project.elements()
     gs = {e.path: gates.gates(project, e, states, traces) for e in elements}
+    checks = {e.path: guide.checklist(project, e, states, traces) for e in elements}
     journal.passed_gates(project, gs, {e.path: e.title for e in elements})
-    return build(project, elements, states, gs), gs
+    return build(project, elements, states, gs, checks=checks), gs
 
 
 def journey_bar(statuses: list[str]) -> str:

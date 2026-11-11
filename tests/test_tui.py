@@ -69,6 +69,23 @@ async def test_home_opens_what_waits(make):
         assert app.element_path == "fee"
 
 
+async def test_gate_items_do_themselves(make, monkeypatch):
+    p = make()
+    app = FactoryApp(p.root)
+    opened = []
+    monkeypatch.setattr(app, "edit_file", opened.append)
+    async with app.run_test(size=(150, 44)) as pilot:
+        await pilot.pause()
+        await pilot.press("2")
+        table = app.query_one("#check-table", DataTable)
+        table.focus()
+        table.move_cursor(row=table.get_row_index("check:concept:0"))
+        await pilot.press("space")
+        await pilot.pause()
+        assert opened == [p.root / "concept/concept.md"]
+        assert "## Options" in opened[0].read_text()
+
+
 def test_editor_command_splits_flags(monkeypatch, tmp_path):
     from factory.tui.app import editor_command
 

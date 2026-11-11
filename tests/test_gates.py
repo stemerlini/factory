@@ -61,3 +61,22 @@ def test_lock_and_unlock(make):
     with pytest.raises(ProjectError, match="analysis not proven"):
         gates.lock(p, head)  # the study is stale after the change
     assert gates.lock(p, head, force=True) == "lock/sensor-head/v2"
+
+
+def test_checklists_say_what_is_left_and_brief_the_agent(make):
+    from factory import agent, guide
+
+    p = make()
+    fee = p.element("fee")
+    checks = guide.checklist(p, fee)
+    concept = checks["concept"][0]
+    assert not concept.done and concept.action == "edit:concept/concept.md"
+    assert guide.next_check(checks, gates.gates(p, fee)).gate == "research"
+    rel = guide.new_requirement(p, fee)
+    assert rel == "elements/fee/req/EL-002.md"
+    assert p.requirement("EL-002").method == "analysis"
+    text = agent.brief(p, fee, gate="concept")
+    assert "Sketch the concept" in text and "# Concept" in text  # open item + playbook
+    (p.root / "playbooks").mkdir()
+    (p.root / "playbooks/concept.md").write_text("Our own way.\n")
+    assert "Our own way." in agent.brief(p, fee, gate="concept")

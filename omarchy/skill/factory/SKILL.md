@@ -83,7 +83,10 @@ Everything you create is a **draft** (`status: draft`).
 
 - **Orient** with `factory home --json` (what waits on the user, each element's next
   step, recent events) and `factory gates <element>`; the first gate that is not done is
-  the work in front of you. `factory journal --since 7` shows what happened lately.
+  the work in front of you; its checklist says what is left. `factory journal --since 7`
+  shows what happened lately.
+- **Playbooks.** When your brief names a gate, follow its playbook. A project can
+  override one in `playbooks/<gate>.md`.
 - **Change** files per FORMATS.md, then `factory check`. A changed input makes its
   studies and their requirements stale: rerun with `factory run <key> -w`.
 - **Long runs** (Geant4, PIC) start in the background with `factory run <key>`; follow

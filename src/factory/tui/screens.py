@@ -341,8 +341,10 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 
 | Key | |
 |---|---|
-| `1`…`9`, `0` | tabs: Home, Overview, Requirements, Architecture, Studies, Results… |
+| `1`…`9`, `0` | tabs: Home, Gates, Requirements, Architecture, Studies, Results… |
 | `enter` | on Home: go to what waits on you, or to an element's next step |
+| `space` | on a Gates item: do it (open the file, dialog or tab it needs) |
+| `a` | on a Gates item: hand that gate to an agent, with its playbook |
 | `r` | run the selected study (in the background) |
 | `v` | view the selected file or output (ParaView, f3d, image…) |
 | `n` | new study in this element |

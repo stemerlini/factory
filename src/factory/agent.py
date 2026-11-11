@@ -17,14 +17,16 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import decisions, gates, review
-from .model import Element
+from . import decisions, gates, guide, review
+from .model import GATES, Element
 from .project import Project
 
 APP_ID = "org.omarchy.factory-agent"
 
 
-def brief(project: Project, element: Element, task: str = "") -> str:
+def brief(project: Project, element: Element, task: str = "", gate: str | None = None) -> str:
+    """The opening message. With ``gate``, the session is about that gate: its open items
+    and its playbook come with the brief."""
     g = gates.gates(project, element)
     cur = gates.current(g)
     where = element.title + (f" ({element.path})" if element.path else " (the system)")
@@ -41,15 +43,28 @@ def brief(project: Project, element: Element, task: str = "") -> str:
                      "carry on from where it stopped.")
     elif review.changes(project):
         lines.append("There are unreviewed changes in the working tree.")
-    lines.append(task.strip() or "Load the factory skill, summarise where this element stands, "
-                 "and propose the next piece of work. Wait for my go-ahead before you start.")
+    if gate:
+        title = dict(GATES)[gate]
+        items = [c for c in guide.checklist(project, element)[gate] if not c.done]
+        lines.append(f"\nWe are working on the {title} gate. Still open:")
+        lines += [f"- {c.label}" + (f" ({c.detail})" if c.detail else "") for c in items] or [
+            "- nothing: review the gate and say whether it is really done"]
+        book = guide.playbook(project, gate).strip()
+        if book:
+            lines += ["", "How we run this gate:", "", book, ""]
+    default = ("Load the factory skill, then propose how you will close the open items of this "
+               "gate. Wait for my go-ahead before you start." if gate else
+               "Load the factory skill, summarise where this element stands, and propose the "
+               "next piece of work. Wait for my go-ahead before you start.")
+    lines.append(task.strip() or default)
     return "\n".join(lines)
 
 
-def command(project: Project, element: Element, task: str = "") -> list[str]:
+def command(project: Project, element: Element, task: str = "",
+            gate: str | None = None) -> list[str]:
     """``claude`` started in the project folder with the brief."""
     name = f"factory · {project.id}" + (f"/{element.path}" if element.path else "")
-    return ["claude", "-n", name, brief(project, element, task)]
+    return ["claude", "-n", name, brief(project, element, task, gate)]
 
 
 def resume_command(session: Session, fork: bool = False) -> list[str]:
@@ -57,9 +72,10 @@ def resume_command(session: Session, fork: bool = False) -> list[str]:
     return ["claude", "--resume", session.id, *(["--fork-session"] if fork else [])]
 
 
-def window_command(project: Project, element: Element, task: str = "") -> list[str]:
+def window_command(project: Project, element: Element, task: str = "",
+                   gate: str | None = None) -> list[str]:
     """The same session in its own Omarchy terminal window."""
-    return window(project, command(project, element, task))
+    return window(project, command(project, element, task, gate))
 
 
 def window(project: Project, argv: list[str]) -> list[str]:

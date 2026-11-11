@@ -36,6 +36,7 @@ from .. import (
     config,
     decisions,
     gates,
+    guide,
     home,
     journal,
     pipeline,
@@ -82,7 +83,7 @@ GATE_STYLE = {
 }
 RUN_STYLE = {"done": "green", "failed": "red", "running": "cyan", "queued": "cyan",
              "cancelled": "yellow"}
-TABS = ("home", "overview", "requirements", "architecture", "studies", "results", "files",
+TABS = ("home", "gates", "requirements", "architecture", "studies", "results", "files",
         "review", "journal", "modules")
 WAITING_MARK = {"review": ("●", "magenta"), "decision": ("?", "yellow"), "failed": ("✗", "red"),
                 "stale": ("●", "yellow"), "unlocked": ("◆", "red"), "problem": ("!", "red")}
@@ -123,6 +124,7 @@ class FactoryApp(App):
         Binding("a", "agent", "Agent"),
         Binding("y", "approve", "Approve", show=False),
         Binding("x", "reject", "Reject", show=False),
+        Binding("space", "do_item", "Do it", show=False),
         Binding("question_mark", "help", "Help"),
     ]
 
@@ -142,6 +144,8 @@ class FactoryApp(App):
         self._agent_live = False
         self.pending: list[review.Change] = []
         self.home = home.Home()
+        self.checks: dict[str, dict[str, list[guide.Check]]] = {}
+        self._checks_shown: str | None = None
 
     # --- layout ----------------------------------------------------------------------------
 
@@ -175,10 +179,10 @@ class FactoryApp(App):
                             yield Static(id="journey")
                             yield Label("RECENTLY", classes="pane-title")
                             yield Static(id="recent")
-                    with TabPane("Overview", id="overview"):
+                    with TabPane("Gates", id="gates"):
                         with VerticalScroll():
                             yield Markdown(id="description")
-                            yield DataTable(id="gate-table", cursor_type="none")
+                            yield DataTable(id="check-table", cursor_type="row")
                             yield Static(id="children")
                     with TabPane("Requirements", id="requirements"):
                         yield DataTable(id="req-table", cursor_type="row", zebra_stripes=True)
@@ -219,7 +223,7 @@ class FactoryApp(App):
             self.register_theme(theme)
             self.theme = theme.name
         self.query_one("#elements", Tree).show_root = False
-        self.query_one("#gate-table", DataTable).add_columns("", "Gate", "Status")
+        self.query_one("#check-table", DataTable).add_columns("", "Gate", "Status")
         self.query_one("#req-table", DataTable).add_columns(
             "", "Id", "Title", "Criterion", "Value", "Parent", "Derived", "Allocated", "Why")
         self.query_one("#block-table", DataTable).add_columns(
@@ -293,6 +297,8 @@ class FactoryApp(App):
             self.traces = trace.trace(self.project, self.states)
             self.gate_states = {p: gates.gates(self.project, e, self.states, self.traces)
                                 for p, e in self.elements.items()}
+            self.checks = {p: guide.checklist(self.project, e, self.states, self.traces)
+                           for p, e in self.elements.items()}
         except ProjectError as e:
             self.notify(str(e), severity="error", timeout=8)
             return
@@ -310,7 +316,7 @@ class FactoryApp(App):
             return
         self.refresh_trace_summary()
         self.refresh_gate_bar()
-        self.refresh_overview()
+        self.refresh_gates()
         self.refresh_requirements()
         self.refresh_architecture()
         self.refresh_studies()
@@ -420,7 +426,7 @@ class FactoryApp(App):
 
     def refresh_home(self) -> None:
         h = home.build(self.project, list(self.elements.values()), self.states,
-                       self.gate_states)
+                       self.gate_states, checks=self.checks)
         self.home = h
         width = 30
         filled = round(h.progress * width)
@@ -510,16 +516,17 @@ class FactoryApp(App):
         elif item.kind == "problem":
             self.action_tab("requirements")
         else:
-            self.action_tab("overview")
+            self.action_tab("gates")
 
     @on(DataTable.RowSelected, "#next-table")
     def open_step(self, event: DataTable.RowSelected) -> None:
         self.select_element(event.row_key.value)
-        self.action_tab("overview")
+        self.action_tab("gates")
+        self.query_one("#check-table", DataTable).focus()
 
     # --- tabs ------------------------------------------------------------------------------
 
-    def refresh_overview(self) -> None:
+    def refresh_gates(self) -> None:
         e = self.element
         kind = registry.kind(e.kind)
         refs = (f"\n\n**References:** {', '.join(e.references)}" if e.references else "")
@@ -527,11 +534,32 @@ class FactoryApp(App):
             f"## {kind.icon} {e.title}\n\n*{kind.title}"
             + (f" · {e.path}" if e.path else " · system") + f" · prefix {e.prefix}*\n\n"
             + (e.description or "_No description yet._") + refs)
-        table = self.query_one("#gate-table", DataTable)
+        table = self.query_one("#check-table", DataTable)
+        keep = table.cursor_row
         table.clear()
-        for x in self.gate_states.get(self.element_path, []):
-            table.add_row(mark(gates.MARKS[x.status], GATE_STYLE[x.status]), x.title,
-                          Text(x.detail, GATE_STYLE[x.status] if x.status != gates.TODO else ""))
+        g = self.gate_states.get(self.element_path, [])
+        cur = gates.current(g)
+        checks = self.checks.get(self.element_path, {})
+        start = None
+        for x in g:
+            here = cur is not None and x.gate == cur.gate
+            table.add_row(mark(gates.MARKS[x.status], GATE_STYLE[x.status]),
+                          Text(x.title, "bold" + (" reverse" if here else "")),
+                          Text(x.detail, GATE_STYLE[x.status] if x.status != gates.TODO else ""),
+                          key=f"gate:{x.gate}")
+            if x.status in (gates.DONE, gates.SKIPPED):
+                continue
+            for n, c in enumerate(checks.get(x.gate, [])):
+                if here and start is None and not c.done:
+                    start = table.row_count
+                table.add_row("", Text.assemble(("  ✓ ", "green") if c.done else "  □ ",
+                                                (c.label, "dim" if c.done else "")),
+                              Text(c.detail, "dim"), key=f"check:{x.gate}:{n}")
+        if self._checks_shown != self.element_path:
+            self._checks_shown = self.element_path
+            keep = start or 0
+        if table.row_count:
+            table.move_cursor(row=min(keep, table.row_count - 1))
         text = Text()
         if e.children:
             text.append("\nSubsystems\n", "bold")
@@ -839,7 +867,7 @@ class FactoryApp(App):
             return self.project.requirement(rid).path
         if tab == "architecture":
             return self.element.dir / architecture.FILE
-        if tab == "overview":
+        if tab == "gates":
             return self.element.dir / "element.md"
         if tab == "files":
             node = self.query_one("#file-tree", DirectoryTree).cursor_node
@@ -855,6 +883,9 @@ class FactoryApp(App):
         path = self.target_path()
         if not path or path.is_dir():
             return
+        self.edit_file(path)
+
+    def edit_file(self, path: Path) -> None:
         argv = editor_command(path)
         try:
             with self.suspend():
@@ -864,6 +895,54 @@ class FactoryApp(App):
             return
         self.rebuild_tree()
         self.refresh_all()
+
+    def selected_check(self) -> tuple[str, guide.Check | None] | None:
+        """(gate, check) under the cursor in the Gates tab; check is None on a gate row."""
+        if self._tab() != "gates" or not self.element:
+            return None
+        key = self._row_key("#check-table")
+        if not key:
+            return None
+        _, gate, *n = key.split(":")
+        items = self.checks.get(self.element_path, {}).get(gate, [])
+        return gate, items[int(n[0])] if n and int(n[0]) < len(items) else None
+
+    @on(DataTable.RowSelected, "#check-table")
+    def check_selected(self) -> None:
+        self.action_do_item()
+
+    def action_do_item(self) -> None:
+        """Space on a checklist item: do it yourself — open the right file, dialog or tab."""
+        picked = self.selected_check()
+        if not picked or picked[1] is None:
+            return
+        verb, _, arg = picked[1].action.partition(":")
+        e = self.element
+        if verb == "edit":
+            path = e.dir / arg
+            if not path.exists():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(guide.STUBS.get(arg, ""))
+            self.edit_file(path)
+        elif verb == "new" and arg == "req":
+            self.edit_file(self.project.root / guide.new_requirement(self.project, e))
+        elif verb == "new" and arg == "study":
+            self.action_new_study()
+        elif verb == "tab":
+            self.action_tab(arg)
+        elif verb == "lock":
+            self.action_lock()
+        elif verb == "open":
+            (e.dir / arg).mkdir(parents=True, exist_ok=True)
+            self.launch(["xdg-open", str(e.dir / arg)])
+        elif verb == "vault":
+            vault = self.project.vault_dir(e)
+            if vault is None:
+                self.notify('Set vault = "…" in ~/.config/factory/config.toml first',
+                            severity="warning")
+                return
+            vault.mkdir(parents=True, exist_ok=True)
+            self.launch(["xdg-open", str(vault)])
 
     def action_open(self) -> None:
         path = self.target_path()
@@ -1038,6 +1117,14 @@ class FactoryApp(App):
             self.notify("Claude Code (claude) is not on PATH", severity="error")
             return
         p, e = self.project, self.element
+        picked = self.selected_check()
+        if picked:
+            gate = picked[0]
+            agent.ensure_files(p)
+            self.launch(agent.window_command(p, e, "", gate))
+            journal.record(p, "agent", f"Agent on {e.title}: {dict(GATES_ORDER)[gate]}", e.path)
+            self.notify(f"Agent session opening for {e.title} · {dict(GATES_ORDER)[gate]}")
+            return
         live = agent.running(p)
         found = agent.sessions(p)
 

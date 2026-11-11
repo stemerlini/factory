@@ -58,7 +58,7 @@ Screen {
     height: 3;
     padding: 1 1 0 1;
 }
-#gate-table {
+#check-table {
     height: auto;
     margin: 1 0;
 }

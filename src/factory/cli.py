@@ -18,6 +18,7 @@ from . import (
     config,
     decisions,
     gates,
+    guide,
     home,
     journal,
     pipeline,
@@ -25,6 +26,7 @@ from . import (
     runs,
     trace,
 )
+from .model import GATES
 from .modules import registry
 from .project import Project, ProjectError, create, templates
 
@@ -90,8 +92,16 @@ def cmd_gates(args):
     p = load(args)
     e = p.element(args.element or "")
     g = gates.gates(p, e)
-    out(args, [x.__dict__ for x in g], f"{e.title}\n" + "\n".join(
-        f"  {gates.MARKS[x.status]} {x.title:10} {x.detail}" for x in g))
+    checks = guide.checklist(p, e)
+    lines = [e.title]
+    for x in g:
+        lines.append(f"  {gates.MARKS[x.status]} {x.title:10} {x.detail}")
+        if x.status not in (gates.DONE, gates.SKIPPED):
+            lines += [f"      {'✓' if c.done else '□'} {c.label}"
+                      + (f"  ({c.detail})" if c.detail else "") for c in checks[x.gate]]
+    out(args, [{**x.__dict__, "checks": [{"label": c.label, "done": c.done, "detail": c.detail}
+                                          for c in checks[x.gate]]} for x in g],
+        "\n".join(lines))
 
 
 def cmd_req(args):
@@ -374,7 +384,8 @@ def cmd_agent(args):
     e = p.element(args.element or "")
     task = args.task or ""
     if args.print:
-        out(args, {"brief": agent.brief(p, e, task)}, agent.brief(p, e, task))
+        text = agent.brief(p, e, task, args.gate)
+        out(args, {"brief": text}, text)
         return
     if args.sessions:
         found, live = agent.sessions(p), agent.running(p)
@@ -394,7 +405,8 @@ def cmd_agent(args):
         argv = agent.resume_command(found[0], fork=args.fork)
         argv = agent.window(p, argv) if args.window else argv
     else:
-        argv = agent.window_command(p, e, task) if args.window else agent.command(p, e, task)
+        argv = (agent.window_command(p, e, task, args.gate) if args.window
+                else agent.command(p, e, task, args.gate))
     for rel in agent.ensure_files(p):
         print(f"Added {rel} (agent guardrails; approve it in the Review tab)", file=sys.stderr)
     if args.window:
@@ -558,6 +570,8 @@ def parser() -> argparse.ArgumentParser:
     p = add("agent", cmd_agent, "start a Claude Code session on an element")
     p.add_argument("element", nargs="?", help="element path (default: the system)")
     p.add_argument("-t", "--task", help="what to work on (default: summarise and propose)")
+    p.add_argument("-g", "--gate", choices=[g for g, _ in GATES],
+                   help="work on this gate: its open items and playbook join the brief")
     p.add_argument("-w", "--window", action="store_true", help="open in a new window")
     p.add_argument("--print", action="store_true", help="only print the brief")
     p.add_argument("-c", "--continue", dest="resume", action="store_true",

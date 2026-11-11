@@ -248,7 +248,11 @@ Factory is agent-first, and the human stays the engineer of record.
   written at the first change, with a `## Where I stopped` section kept current. A new
   session's brief tells it to read the proposal first.
 
-## Workflow assistant (proposed 2026-11-11, for review)
+## Workflow assistant (decided 2026-11-11)
+
+Chosen with the user: everything below, Claude Code as the default agent, the agent pane
+as both a tab and a drawer, shell commands asked in the pane (with "always this session"),
+and subtle fun (toasts, top-bar animation, progress).
 
 Factory knows the state of every element, so it can say what comes next, prepare
 the work for an agent, and keep the story of the project. The aim: open Factory
@@ -276,7 +280,7 @@ to a need. Every item has two ways forward:
 - `a`: **hand it to an agent.** Factory starts a session with a prepared brief: the element,
   the gate, the open items, accepted decisions, and the gate's **playbook**.
   Playbooks are short Markdown recipes per gate (`src/factory/playbooks/<gate>.md`),
-  with project overrides in `.factory/playbooks/`, so how to run the Analyse gate
+  with project overrides in `playbooks/<gate>.md`, kept in git, so how to run the Analyse gate
   of a hardware project is written once and improved over time.
 
 ### Pluggable agents with an integrated agent pane

@@ -43,6 +43,24 @@ factory next          # each element's next step
 factory journal --since 7 --md > handover.md
 ```
 
+## Guided gates
+
+The **Gates** tab (`2`) shows the selected element's gates, and under each one not yet
+done, a short checklist of what is left. Everything is computed from the files:
+"Write its requirements", "Allocate every requirement to a block", "Run the studies and
+keep them up to date", and so on. On an item:
+
+- `space` or `enter` **does it yourself**: the editor on the right file (created from a
+  stub if needed), a new requirement, the New Study dialog, the right tab, or lock.
+- `a` **hands the gate to an agent**: the brief carries the gate's open items and its
+  **playbook**, a short recipe for running that gate. Factory ships one per gate. Put
+  your own in `playbooks/<gate>.md` in the project to change how your team works.
+
+```bash
+factory gates fee            # the gates with their checklists
+factory agent fee -g analyse # an agent session on that gate (--print shows the brief)
+```
+
 ## New projects
 
 `Ctrl+O` → *New project from a template…* asks for a name, a template and a **location**:
