@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Build IRENE (AE9/AP9/SPM, AFRL) from its source distribution into
-# ~/.local/opt/irene/<version>, the toolchain layout Foundry's `irene` module expects:
+# ~/.local/opt/irene/<version>, the toolchain layout Factory's `irene` module expects:
 #   bin/CmdLineIrene, lib/, modelData/, kernelXml/, irene.sh
 #
-# Single-threaded, no GUI (Foundry is the front end). Needs: cmake gcc boost hdf5 xerces-c gtest.
+# Single-threaded, no GUI (Factory is the front end). Needs: cmake gcc boost hdf5 xerces-c gtest.
 #   tools/build-irene [path/to/Irene]      (default: ~/.local/src/irene-*/Irene, newest)
 set -euo pipefail
 
@@ -43,7 +43,7 @@ cp -r "$src/modelData" "$src/kernelXml" "$prefix/"
 cp "$src/irene_defs.py" "$prefix/"
 rm -f "$prefix/../irene_defs.py"  # irene_cpp's install drops a copy one level up
 cat > "$prefix/irene.sh" <<EOF
-# IRENE $version environment (sourced by Foundry's toolchain loader)
+# IRENE $version environment (sourced by Factory's toolchain loader)
 export IRENE_HOME="$prefix"
 export IRENE_DATA="$prefix/modelData"
 export IRENE_KERNELS="$prefix/kernelXml"
@@ -56,7 +56,7 @@ EOF
 mkdir -p "$HOME/.local/bin"
 cat > "$HOME/.local/bin/irene" <<EOF
 #!/usr/bin/env bash
-# IRENE $version (AE9/AP9/SPM) command line; installed by Foundry's tools/build-irene
+# IRENE $version (AE9/AP9/SPM) command line; installed by Factory's tools/build-irene
 source "$prefix/irene.sh"
 # by absolute path: CmdLineIrene finds its helper programs (FluxTask...) next to itself
 exec "$prefix/bin/CmdLineIrene" "\$@"

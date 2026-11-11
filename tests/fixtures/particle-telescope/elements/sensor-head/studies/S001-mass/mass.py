@@ -6,10 +6,10 @@ import os
 
 import yaml
 
-from foundry import metrics
+from factory import metrics
 
-p = json.loads(os.environ["FOUNDRY_PARAMS"])
-stack = yaml.safe_load(open(json.loads(os.environ["FOUNDRY_INPUTS"])["stack"]))
+p = json.loads(os.environ["FACTORY_PARAMS"])
+stack = yaml.safe_load(open(json.loads(os.environ["FACTORY_INPUTS"])["stack"]))
 rho_al, rho_si = 2.70e-3, 2.33e-3  # g/mm3
 r_out, t, length = p["housing_od_mm"] / 2, p["housing_wall_mm"], p["housing_length_mm"]
 tube = math.pi * (r_out**2 - (r_out - t) ** 2) * length * rho_al

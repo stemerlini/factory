@@ -1,6 +1,6 @@
 import pytest
 
-from foundry.project import Project, ProjectError, create, templates
+from factory.project import Project, ProjectError, create, templates
 
 
 def test_three_templates():

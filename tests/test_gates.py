@@ -2,8 +2,8 @@ import subprocess
 
 import pytest
 
-from foundry import gates, runs
-from foundry.project import ProjectError
+from factory import gates, runs
+from factory.project import ProjectError
 
 
 def statuses(p, path=""):

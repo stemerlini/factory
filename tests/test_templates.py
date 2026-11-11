@@ -4,8 +4,8 @@ import shutil
 
 import pytest
 
-from foundry import gates, runs, trace
-from foundry.cli import problems
+from factory import gates, runs, trace
+from factory.cli import problems
 
 
 @pytest.mark.parametrize("template", ["hardware", "software", "publication"])
@@ -48,6 +48,6 @@ def test_publication_counts_words_and_builds_when_latex_is_there(make):
 
 
 def test_tests_never_touch_the_real_config(tmp_path):
-    from foundry import config
+    from factory import config
 
-    assert config.config_path() == tmp_path / "config/foundry/config.toml"
+    assert config.config_path() == tmp_path / "config/factory/config.toml"

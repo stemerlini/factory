@@ -6,9 +6,9 @@ import os
 
 import yaml
 
-from foundry import metrics
+from factory import metrics
 
-stack = yaml.safe_load(open(json.loads(os.environ["FOUNDRY_INPUTS"])["stack"]))
+stack = yaml.safe_load(open(json.loads(os.environ["FACTORY_INPUTS"])["stack"]))
 d1, d2 = stack["layers"][0], stack["layers"][1]
 r1, r2 = d1["radius_mm"] / 10, d2["radius_mm"] / 10  # cm
 length = d2["gap_mm"] / 10  # cm

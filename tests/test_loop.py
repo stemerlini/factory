@@ -6,9 +6,9 @@ import subprocess
 
 import pytest
 
-from foundry import agent, decisions, review
-from foundry.cli import main
-from foundry.project import ProjectError
+from factory import agent, decisions, review
+from factory.cli import main
+from factory.project import ProjectError
 
 
 def commit_all(p):
@@ -20,8 +20,8 @@ def test_new_projects_carry_guardrails(make):
     p = make()
     settings = json.loads((p.root / ".claude/settings.json").read_text())
     deny = settings["permissions"]["deny"]
-    assert "Bash(git commit *)" in deny and "Bash(foundry decide *)" in deny
-    assert "foundry" in (p.root / "CLAUDE.md").read_text()
+    assert "Bash(git commit *)" in deny and "Bash(factory decide *)" in deny
+    assert "factory" in (p.root / "CLAUDE.md").read_text()
     (p.root / "CLAUDE.md").unlink()
     assert agent.ensure_files(p) == ["CLAUDE.md"]
 
@@ -53,8 +53,8 @@ def test_review_approve_and_reject(make):
     req.write_text(req.read_text().replace("0.3", "0.5"))
     (p.root / "elements/fee/notes.md").write_text("new\n")
     (p.root / "req/SYS-001.md").write_text("---\nid: SYS-001\ntitle: changed\n---\n")
-    (p.root / ".foundry").mkdir(exist_ok=True)
-    (p.root / ".foundry/proposal.md").write_text("# Raise the gain margin\n\nBecause.\n")
+    (p.root / ".factory").mkdir(exist_ok=True)
+    (p.root / ".factory/proposal.md").write_text("# Raise the gain margin\n\nBecause.\n")
     found = {c.path: (c.kind, c.element) for c in review.changes(p)}
     assert found == {
         "elements/fee/req/EL-001.md": ("modified", "fee"),
@@ -71,8 +71,8 @@ def test_review_approve_and_reject(make):
     review.approve(p, ["elements/fee/req/EL-001.md"], review.title(p))
     assert review.changes(p) == []
     assert p.git("log", "-1", "--format=%s") == "Raise the gain margin"
-    assert not (p.root / ".foundry/proposal.md").exists()  # archived once all is approved
-    assert list((p.root / ".foundry/proposals").glob("*.md"))
+    assert not (p.root / ".factory/proposal.md").exists()  # archived once all is approved
+    assert list((p.root / ".factory/proposals").glob("*.md"))
 
 
 def test_cli_review_flow(make, capsys):
@@ -131,4 +131,4 @@ def test_agent_sessions_continue_and_handover(make, capsys):
     assert "handover" not in agent.brief(p, p.tree())
     (p.root / review.PROPOSAL).parent.mkdir(exist_ok=True)
     (p.root / review.PROPOSAL).write_text("Mass budget\n\n## Where I stopped\n")
-    assert ".foundry/proposal.md: read it first" in agent.brief(p, p.tree())
+    assert ".factory/proposal.md: read it first" in agent.brief(p, p.tree())

@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Install Foundry into Omarchy: `foundry` command, an apps-menu entry with the icon, and
+# Install Factory into Omarchy: `factory` command, an apps-menu entry with the icon, and
 # the Claude Code skill that lets an agent set projects up from a description.
 # Safe to run again, e.g. after pulling changes or moving the project.
 # Projects and run data are never touched. Undo with tools/uninstall-omarchy.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
-BIN="$HOME/.local/bin/foundry"
-DESKTOP="$HOME/.local/share/applications/foundry.desktop"
+BIN="$HOME/.local/bin/factory"
+DESKTOP="$HOME/.local/share/applications/factory.desktop"
 ICONS="$HOME/.local/share/icons/hicolor"
 
 step() { printf '\e[1;32m›\e[0m %s\n' "$*"; }
 
 # 1. Python environment
-if [[ ! -x $ROOT/.venv/bin/foundry ]]; then
+if [[ ! -x $ROOT/.venv/bin/factory ]]; then
   step "Creating the Python environment"
   python3 -m venv "$ROOT/.venv"
   "$ROOT/.venv/bin/pip" install -q -e "$ROOT"
@@ -25,37 +25,37 @@ if [[ -e $BIN && ! -L $BIN ]]; then
   exit 1
 fi
 mkdir -p "$(dirname "$BIN")"
-ln -sfn "$ROOT/foundry" "$BIN"
-step "Command: $BIN → $ROOT/foundry"
+ln -sfn "$ROOT/factory" "$BIN"
+step "Command: $BIN → $ROOT/factory"
 
 # 3. Icon and apps-menu entry
 mkdir -p "$ICONS/256x256/apps" "$ICONS/512x512/apps" "$ICONS/scalable/apps" "$(dirname "$DESKTOP")"
-cp "$ROOT/assets/icon-256.png" "$ICONS/256x256/apps/foundry.png"
-cp "$ROOT/assets/icon-512.png" "$ICONS/512x512/apps/foundry.png"
-cp "$ROOT/assets/icon.svg" "$ICONS/scalable/apps/foundry.svg"
+cp "$ROOT/assets/icon-256.png" "$ICONS/256x256/apps/factory.png"
+cp "$ROOT/assets/icon-512.png" "$ICONS/512x512/apps/factory.png"
+cp "$ROOT/assets/icon.svg" "$ICONS/scalable/apps/factory.svg"
 gtk-update-icon-cache "$ICONS" &>/dev/null || true
 cat >"$DESKTOP" <<DESKTOP
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Foundry
+Name=Factory
 GenericName=Development workbench
 Comment=Describe, prove and build: requirements, architecture, simulations, design
-Exec=omarchy-launch-or-focus-tui --app-id=org.omarchy.foundry $BIN
-Icon=foundry
+Exec=omarchy-launch-or-focus-tui --app-id=org.omarchy.factory $BIN
+Icon=factory
 Terminal=false
 Categories=Development;Engineering;Science;
 Keywords=requirements;architecture;simulation;geant4;kicad;systems;engineering;
 StartupNotify=true
 DESKTOP
-step "Apps menu: Foundry"
+step "Apps menu: Factory"
 
 # 4. Agents: the Claude Code skill (a link, so it follows the repo)
-SKILL="$HOME/.claude/skills/foundry"
+SKILL="$HOME/.claude/skills/factory"
 if [[ -e $SKILL && ! -L $SKILL ]]; then
   printf '\e[1;33m›\e[0m %s\n' "Agent skill: $SKILL exists and is not a link; left alone"
 else
   mkdir -p "$(dirname "$SKILL")"
-  ln -sfn "$ROOT/omarchy/skill/foundry" "$SKILL"
+  ln -sfn "$ROOT/omarchy/skill/factory" "$SKILL"
   step "Agent skill: $SKILL"
 fi

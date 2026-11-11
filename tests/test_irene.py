@@ -10,9 +10,9 @@ import sys
 
 import pytest
 
-from foundry import runs
-from foundry.modules import irene, registry
-from foundry.project import write_study
+from factory import runs
+from factory.modules import irene, registry
+from factory.project import write_study
 
 FAKE = '''#!{python}
 """Stand-in for CmdLineIrene: flux falls as 1/E, integral as 1/E, dose falls with depth."""
@@ -130,7 +130,7 @@ def test_raw_run_renders_placeholders(make, toolchain):
     folder = p.root / "studies/S011-raw"
     write_study(folder, {"task": "irene.run"})
     (folder / "irene_input.txt").write_text(
-        "ModelType: AP9\nOutFile: ${FOUNDRY_OUTPUTS}/ap9.txt\nFluxType: 1PtDiff\n"
+        "ModelType: AP9\nOutFile: ${FACTORY_OUTPUTS}/ap9.txt\nFluxType: 1PtDiff\n"
         "Energies: 10\nFluxOut: mean\n")
     run = runs.execute(p, p.study("S011"))
     out = runs.run_dir(p, run) / "outputs"

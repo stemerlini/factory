@@ -3,8 +3,8 @@ import shutil
 
 import pytest
 
-from foundry import architecture
-from foundry.project import ProjectError
+from factory import architecture
+from factory.project import ProjectError
 
 
 def test_load_render_export(make):

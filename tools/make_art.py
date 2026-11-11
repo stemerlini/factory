@@ -1,99 +1,98 @@
-"""Foundry's pixel art: an anvil with a glowing ingot and sparks, and a pixel-font banner.
+"""Factory's pixel art: a sawtooth-roofed factory at dusk, and a pixel-font banner.
 
     python tools/make_art.py assets      # writes icon.svg and banner.svg
     rsvg-convert -w 256 assets/icon.svg -o assets/icon-256.png   (etc.)
 
-Same family as Pascaline: flat pop colours, black outlines, a hard drop shadow, drawn on
-a pixel grid with no fonts (the 5 × 7 letters are below).
+Same family as Pathfinder and Citadel: a night scene, hard outlines and drop shadows,
+drawn on a pixel grid with no fonts (the 5 × 7 letters are below).
 """
 
+import random
 import sys
 from pathlib import Path
 
 INK = "#141414"
-CYAN = "#2EC4F1"
+SKY_TOP = "#12091f"
+SKY_MID = "#2b1245"
+SKY_LOW = "#5a1f5e"
+GROUND = "#0d0a14"
 STEEL = "#8FA3BF"
 STEEL_LIGHT = "#D7E0EC"
 STEEL_DARK = "#5E7290"
+BRICK = "#C8472B"
+BRICK_DARK = "#8E2F1D"
 ORANGE = "#FF7A1A"
 HOT = "#FFD23F"
 PINK = "#FF4F8B"
+SMOKE = "#B9B4C8"
+SMOKE_DARK = "#8C86A3"
 CREAM = "#FFF6E3"
 
-N = 32
+def build_factory():
+    """Returns {(x, y): colour}: two striped chimneys behind a sawtooth roof whose teeth
+    glow, a row of lit windows and a door, with smoke rising."""
+    px = {}
+    top, base, teeth, tw = 13, 27, 4, 8
+    width = teeth * tw
+
+    for cx in (3, 11):  # chimneys: brick with a shaded edge, a steel rim, light bands
+        for y in range(4, base):
+            for dx in range(4):
+                px[(cx + dx, y)] = BRICK_DARK if dx == 3 else BRICK
+            if y % 5 == 0:
+                for dx in range(4):
+                    px[(cx + dx, y)] = STEEL_LIGHT if dx < 3 else STEEL
+        for x in range(cx - 1, cx + 5):
+            px[(x, 3)] = STEEL
+            px[(x, 4)] = STEEL_DARK
+    puffs = (
+        (4, 1, 2), (5, 0, 2), (3, -2, 3), (6, -4, 3), (4, -6, 2),
+        (12, 1, 2), (13, 0, 2), (14, -2, 3), (12, -4, 3), (15, -6, 2),
+    )
+    for x, y, r in puffs:  # round-ish puffs, lighter on top
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if dx * dx + dy * dy <= r * r + 1:
+                    px[(x + dx, y + dy)] = SMOKE if dy <= 0 else SMOKE_DARK
+
+    for t in range(teeth):
+        x0 = t * tw
+        for dx in range(tw):
+            ytop = top + dx * 5 // tw
+            for y in range(ytop, base):
+                px[(x0 + dx, y)] = STEEL
+            px[(x0 + dx, ytop)] = STEEL_LIGHT  # lit roof edge
+        for y in range(top, top + 5):  # the glazed vertical face of the tooth, glowing
+            px[(x0, y)] = HOT
+            px[(x0 + 1, y)] = ORANGE if y > top else HOT
+    for x in range(width):  # shaded base
+        px[(x, base - 1)] = STEEL_DARK
+        px[(x, base)] = STEEL_DARK
+    for wx in range(2, width - 2, 5):  # lit windows
+        if 13 <= wx <= 19:
+            continue  # the door sits here
+        for y in range(top + 8, top + 11):
+            for dx in range(3):
+                px[(wx + dx, y)] = HOT if y == top + 8 else ORANGE
+    for x in range(14, 19):  # door
+        for y in range(base - 7, base - 1):
+            px[(x, y)] = INK
+        px[(x, base - 8)] = STEEL_DARK
+    return px
 
 
-def grid():
-    return [[None] * N for _ in range(N)]
-
-
-def anvil_mask():
-    """Side view of an anvil: horn to the left, heel to the right, waist and feet."""
-    m = set()
-
-    def span(y, x0, x1):
-        m.update((x, y) for x in range(x0, x1 + 1))
-
-    span(15, 3, 26)  # face, with the horn growing out of it
-    span(16, 5, 26)
-    span(17, 8, 26)
-    span(18, 11, 25)
-    for y in (19, 20, 21):  # waist
-        span(y, 13, 21)
-    span(22, 11, 23)  # base
-    span(23, 9, 25)
-    span(24, 8, 26)  # feet
-    return m
-
-
-def rect(x0, y0, x1, y1):
-    return {(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)}
-
-
-SPARKS = [(10, 6), (16, 4), (22, 6)]  # small yellow crosses over the hot metal
-
-
-def paint_object(g):
-    """The anvil with a glowing ingot: one ink outline and a hard 2-px drop shadow round
-    the whole shape, then flat colours, then the sparks."""
-    anvil, ingot = anvil_mask(), rect(12, 11, 20, 14)
-    layers = [
-        (anvil, STEEL),
-        ({p for p in anvil if p[1] == 15}, STEEL_LIGHT),  # lit top of the face and horn
-        ({p for p in anvil if p[1] == 24}, STEEL_DARK),  # the feet in shadow
-        (ingot, ORANGE),
-        (rect(13, 11, 19, 11), HOT),  # white-hot top
-    ]
-    body = anvil | ingot
-    outline = {(x + a, y + b) for x, y in body for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1))}
-    outline -= body
-
-    def put(x, y, c):
-        if 0 <= x < N and 0 <= y < N:
-            g[y][x] = c
-
-    for x, y in outline | body:
-        put(x + 2, y + 2, INK)
-    for x, y in outline:
-        put(x, y, INK)
-    for mask, colour in layers:
-        for x, y in mask:
-            put(x, y, colour)
-    for x, y in SPARKS:
-        for a, b in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
-            put(x + a, y + b, HOT)
-
-
-def paint_icon():
-    """The icon: the anvil on a cyan tile with rounded corners."""
-    g = grid()
-    for y in range(1, 31):
-        for x in range(1, 31):
-            if (x in (1, 30)) and (y in (1, 30)):
-                continue
-            g[y][x] = CYAN
-    paint_object(g)
+def to_grid(px, w, h, ox=0, oy=0):
+    g = [[None] * w for _ in range(h)]
+    for (x, y), c in px.items():
+        if 0 <= x + ox < w and 0 <= y + oy < h:
+            g[y + oy][x + ox] = c
     return g
+
+
+def bounds(px):
+    xs = [p[0] for p in px]
+    ys = [p[1] for p in px]
+    return min(xs), min(ys), max(xs), max(ys)
 
 
 # A 5 × 7 pixel font.
@@ -104,24 +103,16 @@ FONT = {
     "D": ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
     "E": ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
     "F": ["11111", "10000", "10000", "11110", "10000", "10000", "10000"],
-    "G": ["01111", "10000", "10000", "10011", "10001", "10001", "01111"],
-    "H": ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
     "I": ["11111", "00100", "00100", "00100", "00100", "00100", "11111"],
-    "K": ["10001", "10010", "10100", "11000", "10100", "10010", "10001"],
     "L": ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
-    "M": ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
-    "N": ["10001", "11001", "10101", "10011", "10001", "10001", "10001"],
     "O": ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
     "P": ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
-    "Q": ["01110", "10001", "10001", "10001", "10101", "10010", "01101"],
     "R": ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
     "S": ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
     "T": ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
     "U": ["10001", "10001", "10001", "10001", "10001", "10001", "01110"],
     "V": ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
-    "W": ["10001", "10001", "10001", "10101", "10101", "10101", "01010"],
     "Y": ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
-    "-": ["00000", "00000", "00000", "11111", "00000", "00000", "00000"],
     "·": ["00000", "00000", "00000", "00100", "00000", "00000", "00000"],
     " ": ["00000"] * 7,
 }
@@ -144,13 +135,15 @@ def rects(cells, scale, x0=0, y0=0):
     return "\n  ".join(out)
 
 
-def text_cells(text, color):
+def text_cells(text, color, top=None):
+    """Letters as a pixel grid; `top` colours the first two rows differently (Citadel-style)."""
     rows = [[] for _ in range(7)]
     for k, ch in enumerate(text):
         for y in range(7):
             if k:
                 rows[y].append(None)  # one pixel between letters
-            rows[y].extend(color if b == "1" else None for b in FONT[ch][y])
+            c = top if top and y < 2 else color
+            rows[y].extend(c if b == "1" else None for b in FONT[ch][y])
     return rows
 
 
@@ -160,32 +153,86 @@ def svg(w, h, body, bg=None):
             f'height="{h}" shape-rendering="crispEdges">\n  {back}{body}\n</svg>\n')
 
 
+def factory_art():
+    """The factory cropped to its bounds, as (grid, width, height)."""
+    art = build_factory()
+    x0, y0, x1, y1 = bounds(art)
+    w, h = x1 - x0 + 1, y1 - y0 + 1
+    return to_grid(art, w, h, -x0, -y0), w, h
+
+
+def sky_bands(w, h, horizon, s):
+    """Dusk gradient in flat bands, as full-width rectangles."""
+    stops = [SKY_TOP, "#1b0d30", SKY_MID, "#40184f", SKY_LOW]
+    band = horizon // len(stops) + 1
+    return "\n  ".join(
+        f'<rect x="0" y="{i * band}" width="{w}" height="{min(band, horizon - i * band)}" '
+        f'fill="{c}"/>' for i, c in enumerate(stops) if i * band < horizon)
+
+
+def stars(w, horizon, seed, keep_out=()):
+    rnd = random.Random(seed)
+    out = []
+    for _ in range(70):
+        x, y = rnd.randrange(8, w - 8), rnd.randrange(6, int(horizon * 0.7))
+        if any(a <= x <= c and b <= y <= d for a, b, c, d in keep_out):
+            continue
+        size = rnd.choice((2, 2, 3, 4))
+        col = rnd.choice((CREAM, CREAM, "#8f86b8", HOT))
+        out.append(f'<rect x="{x}" y="{y}" width="{size}" height="{size}" fill="{col}"/>')
+    return "\n  ".join(out)
+
+
 def icon():
-    return svg(N, N, rects(paint_icon(), 1))
+    """The factory on a dusk tile with rounded corners."""
+    n = 48
+    art, w, h = factory_art()
+    g = [[None] * n for _ in range(n)]
+    for y in range(1, n - 1):
+        for x in range(1, n - 1):
+            if x in (1, n - 2) and y in (1, n - 2):
+                continue
+            g[y][x] = SKY_MID if y < 30 else SKY_LOW
+    ox, oy = (n - w) // 2, n - h - 5
+    for y in range(h):
+        for x in range(w):
+            if art[y][x]:
+                g[y + oy][x + ox] = art[y][x]
+    return svg(n, n, rects(g, 1))
 
 
 def banner():
-    """The anvil on the left, wordmark and tagline on the right, centred as a group."""
-    art = grid()
-    paint_object(art)
-    pts = [(x, y) for y, row in enumerate(art) for x, c in enumerate(row) if c]
-    x0, x1 = min(p[0] for p in pts), max(p[0] for p in pts)
-    y0, y1 = min(p[1] for p in pts), max(p[1] for p in pts)
-    crop = [row[x0:x1 + 1] for row in art[y0:y1 + 1]]
-    w, h, s = 1280, 320, 7
-    mw, mh = (x1 - x0 + 1) * s, (y1 - y0 + 1) * s
-    ts, gs, gap = 13, 4, 64  # title and tagline pixel sizes, gap after the anvil
-    title, tag = "FOUNDRY", "DESCRIBE · PROVE · BUILD"
+    """The factory on the left of a dusk skyline, wordmark and tagline on the right."""
+    art, aw, ah = factory_art()
+    w, h, s = 1280, 360, 6
+    ground = 300
+    left = 110
+    fy = ground - ah * s
+    ts, gs = 15, 4
+    title, tag = "FACTORY", "DESCRIBE · PROVE · BUILD"
     tw = (len(title) * 6 - 1) * ts
-    left = (w - (mw + gap + tw)) // 2
-    tx, ty = left + mw + gap, (h - (7 * ts + 34 + 7 * gs)) // 2
+    tx = left + aw * s + 100
+    ty = 62
+    skyline = []
+    rnd = random.Random(7)
+    x = 0
+    while x < w:  # distant roofline of other plants, as dark steps
+        bw, bh = rnd.choice((40, 56, 72)), rnd.choice((16, 24, 32, 40))
+        skyline.append(f'<rect x="{x}" y="{ground - bh}" width="{bw}" height="{bh}" '
+                       f'fill="#1a0f2b"/>')
+        x += bw
     body = "\n  ".join([
-        rects(crop, s, left, (h - mh) // 2),
+        sky_bands(w, h, ground, s),
+        stars(w, ground, 11, keep_out=[(left - 20, ty - 20, tx + tw + 40, ty + 150)]),
+        "\n  ".join(skyline),
+        f'<rect x="0" y="{ground}" width="{w}" height="{h - ground}" fill="{GROUND}"/>',
+        f'<rect x="0" y="{ground}" width="{w}" height="4" fill="{PINK}"/>',
+        rects(art, s, left, fy),
         rects(text_cells(title, INK), ts, tx + ts // 2, ty + ts // 2),  # pop shadow
-        rects(text_cells(title, ORANGE), ts, tx, ty),
-        rects(text_cells(tag, INK), gs, tx + 2, ty + 7 * ts + 34),
+        rects(text_cells(title, ORANGE, top=HOT), ts, tx, ty),
+        rects(text_cells(tag, "#9fd8f0"), gs, tx + 2, ty + 7 * ts + 28),
     ])
-    return svg(w, h, body, bg=CYAN)
+    return svg(w, h, body)
 
 
 if __name__ == "__main__":

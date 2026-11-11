@@ -1,7 +1,7 @@
 import pytest
 
-from foundry import pipeline, runs, trace
-from foundry.project import ProjectError, write_study
+from factory import pipeline, runs, trace
+from factory.project import ProjectError, write_study
 
 
 def by_id(p):
@@ -55,11 +55,11 @@ def test_staleness_flows_downstream(make):
     d = p.root / "studies"
     write_study(d / "S001-a", {"task": "script", "params": {"file": "a.py"}})
     (d / "S001-a/a.py").write_text(
-        "import os,pathlib\npathlib.Path(os.environ['FOUNDRY_OUTPUTS'],'v').write_text('1')\n")
+        "import os,pathlib\npathlib.Path(os.environ['FACTORY_OUTPUTS'],'v').write_text('1')\n")
     write_study(d / "S002-b", {"task": "script", "params": {"file": "b.py"},
                                "inputs": {"v": "@S001:v"}})
     (d / "S002-b/b.py").write_text(
-        "import json,os\nprint(open(json.loads(os.environ['FOUNDRY_INPUTS'])['v']).read())\n")
+        "import json,os\nprint(open(json.loads(os.environ['FACTORY_INPUTS'])['v']).read())\n")
     for key in ("S001", "S002"):
         assert runs.execute(p, p.study(key)).status == "done"
     assert {k: v.status for k, v in pipeline.states(p).items()} == {"S001": "ok", "S002": "ok"}

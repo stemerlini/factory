@@ -1,14 +1,14 @@
 import json
 from pathlib import Path
 
-from foundry.cli import main
+from factory.cli import main
 
 
 def test_new_status_run_req(tmp_path, capsys):
     root = tmp_path / "thr"
     fixture = Path(__file__).parent / "fixtures/plasma-thruster"
     assert main(["new", str(root), "-t", str(fixture)]) == 0
-    manifest = root / "foundry.toml"
+    manifest = root / "factory.toml"
     manifest.write_text(manifest.read_text() + f'\n[store]\nroot = "{tmp_path / "store"}"\n')
     capsys.readouterr()
 
@@ -34,7 +34,7 @@ def test_new_status_run_req(tmp_path, capsys):
 
 def test_outside_project_is_an_error(tmp_path, capsys):
     assert main(["status", "-C", str(tmp_path)]) == 2
-    assert "not inside a Foundry project" in capsys.readouterr().err
+    assert "not inside a Factory project" in capsys.readouterr().err
 
 
 def test_check_finds_problems(make, capsys):

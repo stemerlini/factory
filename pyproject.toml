@@ -1,5 +1,5 @@
 [project]
-name = "foundry"
+name = "factory"
 dynamic = ["version"]
 description = "A hardware-development workbench for Omarchy: requirements, studies, runs and traceability, with pluggable engines."
 requires-python = ">=3.12"
@@ -13,10 +13,10 @@ dependencies = [
 dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6"]
 
 [project.scripts]
-foundry = "foundry.cli:main"
+factory = "factory.cli:main"
 
-[project.entry-points."foundry.modules"]
-# Third-party modules register here, e.g. `warpx = "foundry_warpx:module"`.
+[project.entry-points."factory.modules"]
+# Third-party modules register here, e.g. `warpx = "factory_warpx:module"`.
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -26,10 +26,10 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.dynamic]
-version = {attr = "foundry.__version__"}
+version = {attr = "factory.__version__"}
 
 [tool.setuptools.package-data]
-foundry = ["tui/*.tcss", "templates/**/*"]
+factory = ["tui/*.tcss", "templates/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

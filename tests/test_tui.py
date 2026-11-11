@@ -1,13 +1,13 @@
 from textual.widgets import DataTable, Tree
 
-from foundry import runs
-from foundry.tui.app import FoundryApp
+from factory import runs
+from factory.tui.app import FactoryApp
 
 
 async def test_tui_elements_tabs_and_new_study(make):
     p = make()
     runs.execute(p, p.study("S001"))
-    app = FoundryApp(p.root)
+    app = FactoryApp(p.root)
     async with app.run_test(size=(150, 44)) as pilot:
         await pilot.pause()
         assert app.query_one("#req-table", DataTable).row_count == 6
@@ -29,7 +29,7 @@ async def test_tui_elements_tabs_and_new_study(make):
 
 
 def test_editor_command_splits_flags(monkeypatch, tmp_path):
-    from foundry.tui.app import editor_command
+    from factory.tui.app import editor_command
 
     monkeypatch.delenv("VISUAL", raising=False)
     monkeypatch.setenv("EDITOR", "omarchy-launch-editor --inline")
@@ -40,7 +40,7 @@ def test_editor_command_splits_flags(monkeypatch, tmp_path):
 async def test_review_tab_decide_approve_reject(make):
     import subprocess
 
-    from foundry import decisions, review
+    from factory import decisions, review
 
     p = make()
     subprocess.run(["git", "-C", str(p.root), "add", "-A"], check=True)
@@ -48,7 +48,7 @@ async def test_review_tab_decide_approve_reject(make):
     decisions.ask(p, p.tree(), "Orbit", ["LEO: 550 km", "GEO"], "A", "Drives the spectra.")
     (p.root / "concept/sketch.md").write_text("# idea\n")
     (p.root / "scratch.txt").write_text("junk\n")
-    app = FoundryApp(p.root)
+    app = FactoryApp(p.root)
     async with app.run_test(size=(150, 44)) as pilot:
         await pilot.pause()
         await pilot.press("8")
@@ -82,15 +82,15 @@ async def test_review_tab_decide_approve_reject(make):
 
 
 async def test_agent_dialog_continues_last_session(make, monkeypatch):
-    from foundry import agent
-    from foundry.tui.screens import AgentScreen
+    from factory import agent
+    from factory.tui.screens import AgentScreen
 
     p = make()
     folder = agent.session_dir(p)
     folder.mkdir(parents=True)
     (folder / "abc.jsonl").write_text('{"type": "last-prompt", "lastPrompt": "size the ADC"}\n')
     monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}")
-    app = FoundryApp(p.root)
+    app = FactoryApp(p.root)
     launched = []
     monkeypatch.setattr(app, "launch", launched.append)
     async with app.run_test(size=(150, 44)) as pilot:

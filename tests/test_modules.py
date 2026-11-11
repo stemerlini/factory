@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from foundry.modules import kicad, registry
-from foundry.modules.api import Toolchain
+from factory.modules import kicad, registry
+from factory.modules.api import Toolchain
 
 
 def test_registry_has_builtins():
@@ -51,7 +51,7 @@ def test_kicad_erc_counts_errors(tmp_path):
 def test_ngspice_meas_parsing(tmp_path):
     from types import SimpleNamespace
 
-    from foundry.modules import ngspice
+    from factory.modules import ngspice
 
     (tmp_path / "ngspice.log").write_text(
         "vmin                =  -3.67e-04 at=  2.1e-06\ngain = 3.670000e-01\n")

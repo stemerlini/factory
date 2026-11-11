@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from foundry import project as project_mod
+from factory import project as project_mod
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -25,7 +25,7 @@ def make(tmp_path):
         """A project from a shipped template, or from tests/fixtures when one has that name."""
         fixture = FIXTURES / template
         p = project_mod.create(tmp_path / name, str(fixture) if fixture.is_dir() else template)
-        manifest = p.root / "foundry.toml"
+        manifest = p.root / "factory.toml"
         manifest.write_text(manifest.read_text() + f'\n[store]\nroot = "{tmp_path / "store"}"\n')
         return project_mod.Project.load(p.root)
 

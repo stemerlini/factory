@@ -4,9 +4,9 @@ import json
 import math
 import os
 
-from foundry import metrics
+from factory import metrics
 
-p = json.loads(os.environ["FOUNDRY_PARAMS"])
+p = json.loads(os.environ["FACTORY_PARAMS"])
 e, m_xe, g0 = 1.602176634e-19, 131.293 * 1.66053907e-27, 9.80665
 v_ex = math.sqrt(2 * e * p["discharge_voltage"] * p["voltage_utilisation"] / m_xe)
 thrust = p["mass_utilisation"] * p["mass_flow"] * v_ex

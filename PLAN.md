@@ -1,4 +1,4 @@
-# Foundry — plan (working name)
+# Factory — plan (working name)
 
 > A universal workbench for developing anything — a particle telescope, a plasma
 > thruster, a circuit board, a piece of software. One loop, applied at every level:
@@ -27,7 +27,7 @@ Developing a product is the same process whatever the product is:
 8. **Design and deliver**: KiCad schematic and layout, 3D CAD, code — ending in a report,
    a BOM and manufacturing outputs.
 
-Foundry is the one interface over that loop. It does not replace the specialist tools; it
+Factory is the one interface over that loop. It does not replace the specialist tools; it
 launches them, versions what they produce, runs the analyses, traces every result to a
 requirement and writes the reports.
 
@@ -52,7 +52,7 @@ The scaffold had *project → stages → studies*. Vision v2 makes it recursive:
 
 | Noun | What it is | Lives in |
 |---|---|---|
-| **Project** | A git repo; settings, modules, toolchains, Obsidian link | `foundry.toml` |
+| **Project** | A git repo; settings, modules, toolchains, Obsidian link | `factory.toml` |
 | **Element** | A node of the product breakdown: system, subsystem, component. Has a **kind** (system, electronics, mechanical, software, generic) that decides its default tools | `element.md` in its folder; children under `elements/` |
 | **Gate** | The fixed loop every element goes through: Describe · Research · Architect · Concept · Analyse · Lock · Design · Deliver. Status comes from content, not ticking boxes; an element may **skip** gates (`skip: [research]`) | computed |
 | **Requirement** | Text + verification method + optional metric criterion; `parent` links flow down from the parent element; `allocated` names the block that must meet it | `req/*.md` per element |
@@ -116,7 +116,7 @@ allocate:
   to see its requirements, interfaces and child element.
 - **Exports**: SVG (D2 or Graphviz) for reports; an **Obsidian Canvas** (`.canvas`) so the
   diagram is browsable next to the notes. Editing back from Canvas is a later option.
-- `foundry decompose fee` creates the child element with its allocated requirements stubbed
+- `factory decompose fee` creates the child element with its allocated requirements stubbed
   as children (`EL-001 parent: SYS-004`).
 
 ## Seeing results: viewers
@@ -127,7 +127,7 @@ A **viewer** is a module capability, like a tool: file kinds → how to show the
 |---|---|---|
 | Plots (PNG/SVG from runs) | inline in the TUI (textual-image), like Citadel previews | in place |
 | Interactive plots | matplotlib/plotly window | tiled window next to the TUI |
-| 3D fields, meshes, ntuples → VTK (`.vtu`, `.vtk`, `.pvd`, HDF5) | **ParaView** standalone, opened by Foundry with a prepared state (`pvpython` script per study) | its own window, Hyprland rule, theme colours |
+| 3D fields, meshes, ntuples → VTK (`.vtu`, `.vtk`, `.pvd`, HDF5) | **ParaView** standalone, opened by Factory with a prepared state (`pvpython` script per study) | its own window, Hyprland rule, theme colours |
 | Quick 3D look: STEP, STL, GLTF, VTK | **f3d** (fast, minimal) | floating window, instant |
 | Geometry for Geant4 (GDML) | Geant4 Qt viewer | window |
 | Schematic / PCB | KiCad, or SVG export inline | window / in place |
@@ -144,10 +144,10 @@ d2, graphviz; Obsidian is installed.
 | Sourced knowledge: papers, books, standards | **Citadel** | one library, cited by key |
 | Produced knowledge: notes, analyses, reports | **Obsidian vault** (`<vault>/Projects/<project>/<element>/`) | where you read and write |
 | Design data: requirements, architecture, studies, CAD, KiCad, code | **project git repo** | versioned, reproducible, diffable |
-| Bulky run outputs | **run store** (`~/Data/foundry`) | too big for git |
+| Bulky run outputs | **run store** (`~/Data/factory`) | too big for git |
 
-- The vault is not set up yet; its path is a Foundry setting (`vault` in
-  `~/.config/foundry/config.toml`). Without it, note and report features say so and wait.
+- The vault is not set up yet; its path is a Factory setting (`vault` in
+  `~/.config/factory/config.toml`). Without it, note and report features say so and wait.
 - **Reports** are generated into the vault from a template per gate, with data blocks filled
   from the repo (description, block diagram SVG, trace table, plots, decisions, BOM) around
   sections you write; regenerating refreshes only the marked data blocks.
@@ -171,7 +171,7 @@ d2, graphviz; Obsidian is installed.
 
 ```
 ptel/                                   ← git repo
-├── foundry.toml                        ← project settings, modules, toolchains
+├── factory.toml                        ← project settings, modules, toolchains
 ├── element.md                          ← root element: system description (kind: system)
 ├── req/SYS-001.md …
 ├── architecture.yaml
@@ -185,7 +185,7 @@ ptel/                                   ← git repo
 │   │   ├── out/bom.csv  out/gerbers/
 │   └── sensor-head/                    ← kind: mechanical
 │       ├── design/head.FCStd  studies/S001-modal/  out/head.step
-└── .foundry/                           ← cache (not committed)
+└── .factory/                           ← cache (not committed)
 ```
 
 Requirement ids carry the element prefix (`SYS-`, `EL-`, `ME-`, `SW-`), set in `element.md`.
@@ -194,7 +194,7 @@ Study ids are local to their element; across elements they are written `fee/S001
 ## TUI
 
 ```
-┌ Foundry · Particle telescope · main @ 3f2a… ─────────────── ⟳ fee/S002 62% ┐
+┌ Factory · Particle telescope · main @ 3f2a… ─────────────── ⟳ fee/S002 62% ┐
 │ Elements          │ System — gates                                         │
 │ ▾ ◆ System    ●   │ Describe ✓  Research ✓  Architect ✓  Concept ✓          │
 │   ├ ⏚ FEE     ○   │ Analyse ● 2 stale  Lock ○  Design —  Deliver —          │
@@ -216,34 +216,34 @@ Study ids are local to their element; across elements they are written `fee/S001
 
 ## Agents and the human in the loop (decided 2026-10-18)
 
-Foundry is agent-first, and the human stays the engineer of record.
+Factory is agent-first, and the human stays the engineer of record.
 
-- **Start an agent** with `a` in the TUI (or `foundry agent [element] [-t task] [-w]`):
+- **Start an agent** with `a` in the TUI (or `factory agent [element] [-t task] [-w]`):
   Claude Code opens in its own Omarchy window in the project folder, briefed with the
   element, its next gate, open decisions and unreviewed work, and asked to summarise and
   propose before it builds.
-- **The `foundry` skill** carries the recipe and the protocol: orient on decisions and
-  pending review; propose before cross-cutting work; `foundry ask` on real trade-offs;
-  leave changes uncommitted with a **proposal** (`.foundry/proposal.md`, line one = commit
+- **The `factory` skill** carries the recipe and the protocol: orient on decisions and
+  pending review; propose before cross-cutting work; `factory ask` on real trade-offs;
+  leave changes uncommitted with a **proposal** (`.factory/proposal.md`, line one = commit
   title); hand over.
 - **Guardrails, enforced:** every project has `.claude/settings.json` denying `git commit`,
-  `push`, `reset`, `checkout`, `restore`, `tag`, `rebase`, `foundry lock`, `decide`,
+  `push`, `reset`, `checkout`, `restore`, `tag`, `rebase`, `factory lock`, `decide`,
   `approve`, `reject` (verified: a live session's commit was blocked). Prefix rules can be
   sidestepped (`git -C . commit`), so the real gate is review: nothing reaches history
   unless the human approves it.
 - **Review tab** (`8`, label shows the count): the proposal, pending changes per element
   with diffs, and decisions. `y` approves (commit; all, or the selected element's files),
-  `x` discards a file, `enter` answers a decision. CLI: `foundry review | approve | reject`.
+  `x` discards a file, `enter` answers a decision. CLI: `factory review | approve | reject`.
 - **Decisions** (`decisions/D001-*.md` per element): proposed with options and a
-  recommendation (`foundry ask`); accepted or rejected only by the human (`foundry decide`
+  recommendation (`factory ask`); accepted or rejected only by the human (`factory decide`
   or the Review tab), with a note kept in the record. Accepted decisions bind the agent.
 - The TUI refreshes by itself when files change, so it follows the agent live.
 - **The agent belongs to the project** (2026-10-19). The top bar shows `◆ agent working`
   while a Claude Code session runs in the project folder. `a` opens one dialog: go to the
   running session (focuses its window), continue the last saved session (after a usage
   limit resets), continue a copy, or start a new one on the selected element with a task.
-  CLI: `foundry agent --sessions | --continue | --fork`. Sessions are Claude Code's own
-  transcripts (`~/.claude/projects/<folder>`); Foundry only finds them.
+  CLI: `factory agent --sessions | --continue | --fork`. Sessions are Claude Code's own
+  transcripts (`~/.claude/projects/<folder>`); Factory only finds them.
 - **Handover:** a session can stop at any moment, so the proposal doubles as the handover:
   written at the first change, with a `## Where I stopped` section kept current. A new
   session's brief tells it to read the proposal first.
@@ -278,7 +278,7 @@ The particle-telescope and plasma-thruster trees live on as test fixtures.
 3. **Viewers** — inline plots, f3d, ParaView launcher with per-study state, Hyprland rules.
 3b. ✓ **Environment** — IRENE (AE9/AP9) `irene.environment`: orbit → spectra (CSV), Geant4
    GPS sources, TID vs Al depth; `irene.run` for any hand-written input; `tools/build-irene`.
-4. **Geant4** — build toolchain; `foundry-g4` generic app; stack → GDML; response; bowtie.
+4. **Geant4** — build toolchain; `factory-g4` generic app; stack → GDML; response; bowtie.
 5. **Baselines** — lock/unlock, tags, frozen reports, change impact on children.
 6. **Electronics** — ngspice studies (metrics from `.meas`), KiCad ERC/DRC, BOM + Gerbers.
 7. **Mechanics** — FreeCAD/build123d, STEP export, FEA (CalculiX/Elmer), drawings.
@@ -288,6 +288,6 @@ The particle-telescope and plasma-thruster trees live on as test fixtures.
 ## Open questions
 
 - Vault location (not set up yet).
-- Name (working name *Foundry*); projects root (default `~/Hardware`); run store
-  (default `~/Data/foundry`, off OneDrive).
+- Name (working name *Factory*); projects root (default `~/Hardware`); run store
+  (default `~/Data/factory`, off OneDrive).
 - Element ids/prefixes: free per project, or a fixed scheme (SYS / EL / ME / SW)?
