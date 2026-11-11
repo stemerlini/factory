@@ -44,7 +44,12 @@ class ProjectPicker(ModalScreen[Path | None]):
     @on(OptionList.OptionSelected)
     def chosen(self, event: OptionList.OptionSelected) -> None:
         if event.option.id == NEW:
-            self.app.push_screen(NewProjectScreen(), self.dismiss)
+            # Textual awaits what a callback returns, and awaiting dismiss() from a
+            # screen's own handler raises, so the result must not be returned.
+            def created(root: Path | None) -> None:
+                self.dismiss(root)
+
+            self.app.push_screen(NewProjectScreen(), created)
         else:
             self.dismiss(Path(event.option.id))
 
