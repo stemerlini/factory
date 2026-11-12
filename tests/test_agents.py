@@ -49,3 +49,27 @@ def test_agent_session_follows_the_policy_and_resumes(make):
         await two.close()
 
     asyncio.run(go())
+
+
+OPTIONS = [{"optionId": "yes", "kind": "allow_once"}, {"optionId": "no", "kind": "reject_once"}]
+
+
+def test_questions_asked_together_each_get_their_answer(make):
+    p = make()
+
+    async def go():
+        one = live.Live(p, "", "fake")
+        ask = [{"toolCall": {"toolCallId": f"t{n}", "kind": "execute",
+                             "rawInput": {"command": cmd}}, "options": OPTIONS}
+               for n, cmd in enumerate(["uname", "hostname"])]
+        first, second = (asyncio.create_task(one.permission(a)) for a in ask)
+        while len(one.questions) < 2:
+            await asyncio.sleep(0)
+        assert one.asking.command == "uname"
+        one.answer("deny")
+        assert await first == "no"
+        assert one.state == live.ASKING and one.asking.command == "hostname"
+        one.answer("allow")
+        assert await second == "yes" and one.state != live.ASKING
+
+    asyncio.run(go())

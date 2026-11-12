@@ -102,10 +102,16 @@ class Live:
         self.state = STARTING
         self.error = ""
         self.session_id: str | None = None
-        self.asking: Asking | None = None
+        # Agents may ask several things at once (Copilot asks for an MCP call and a command
+        # together); each waits its turn, or an answer would go to the wrong one.
+        self.questions: list[Asking] = []
         self.allowed: set[str] = set()
         self.conn: acp.Connection | None = None
         self._tools: dict[str, Entry] = {}
+
+    @property
+    def asking(self) -> Asking | None:
+        return self.questions[0] if self.questions else None
 
     @property
     def title(self) -> str:
@@ -168,8 +174,9 @@ class Live:
         self._set(FAILED if self.state == STARTING else STOPPED)
 
     async def cancel(self) -> None:
-        if self.asking:
+        while self.asking:
             self.answer(None)
+            await asyncio.sleep(0)
         if self.state == WORKING and self.conn:
             await self.conn.notify("session/cancel", {"sessionId": self.session_id})
 
@@ -228,21 +235,25 @@ class Live:
             return acp.pick(options, allow=True)
         command = acp.command_of(entry.raw) if entry.raw.get("kind") == "execute" else ""
         future = asyncio.get_running_loop().create_future()
-        self.asking = Asking(entry, acp.scope_of(command) if command else "", options, future)
+        asking = Asking(entry, acp.scope_of(command) if command else "", options, future)
+        self.questions.append(asking)
         self._set(ASKING)
         try:
             choice = await future
         finally:
-            self.asking = None
-            if self.state == ASKING:
+            self.questions.remove(asking)
+            if self.questions:
+                self.changed(self)
+            elif self.state == ASKING:
                 self._set(WORKING)
         return None if choice is None else acp.pick(options, allow=choice != "deny")
 
     def answer(self, choice: str | None) -> None:
         """The user's answer to what is being asked: ``allow``, ``always`` (this kind of
         command, for the rest of the session), ``deny``, or None to cancel."""
-        if not self.asking or self.asking.future.done():
+        asking = next((a for a in self.questions if not a.future.done()), None)
+        if not asking:
             return
-        if choice == "always" and self.asking.command:
-            self.allowed.add(self.asking.command)
-        self.asking.future.set_result(choice)
+        if choice == "always" and asking.command:
+            self.allowed.add(asking.command)
+        asking.future.set_result(choice)

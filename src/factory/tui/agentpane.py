@@ -150,6 +150,9 @@ class AgentPane(Vertical):
             if asking.command:
                 keys.append_text(Text.assemble("  ", ("s", "bold"),
                                                f" always allow `{asking.command}` this session"))
+            more = len(session.questions) - 1
+            if more:
+                keys.append(f"   ({more} more waiting)", style="dim")
             question.ask(f"{session.title} asks to run:" if asking.command else
                          f"{session.title} asks:", what, keys)
         self.query_one(Input).disabled = session is None or session.state in (
