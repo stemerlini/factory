@@ -4,6 +4,7 @@ import pytest
 
 from factory.modules import kicad, registry
 from factory.modules.api import Toolchain
+from factory.project import Project
 
 
 def test_registry_has_builtins():
@@ -69,3 +70,16 @@ def test_viewer_lookup(tmp_path, monkeypatch):
     assert registry.viewer_for(Path("plot.png")).id == "image"
     assert registry.viewer_for(Path("notes.txt")) is None
 
+
+
+def test_suite_lists_the_projects_tools_first(make):
+    p = make()
+    p.enable("irene")
+    p.enable("geant4", False)  # a study still runs geant4.run, so the project still uses it
+    p = Project.load(p.root)
+    assert p.modules[-1] == "irene" and "geant4" not in p.modules
+    rows = {m.id: (uses, studies) for m, uses, studies in registry.suite(p)}
+    assert rows["irene"] == (True, []) and rows["geant4"][0] and rows["geant4"][1]
+    assert not rows["pic"][0]
+    flags = [uses for _, uses, _ in registry.suite(p)]
+    assert flags == sorted(flags, reverse=True)

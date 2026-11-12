@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import textwrap
 import time
 import tomllib
 from pathlib import Path
@@ -402,7 +403,7 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 | `d` | decompose the selected block into a subsystem (Architecture tab) |
 | `L` | lock the element (needs a commit and proven analysis) |
 | `c` | cancel the selected run |
-| `m` | modules: which tools are installed and enabled |
+| `m` | tools: what the project uses, what is installed; `e` enables a module |
 | `ctrl+p` | command palette: every action by name |
 | `a` | agent: start (or show) this element's agent in the pane, briefed on it |
 | `ctrl+a` | show, focus or hide the agent pane; `esc` in it stops the agent |
@@ -422,40 +423,70 @@ Requirements: ✓ pass · ✗ fail · ● stale · ◌ pending · ○ open.
 """
 
 
-class ModulesScreen(ModalScreen[None]):
-    """The modules Factory knows, which this project enables, and whether their tools are
-    installed: setup, not daily work, so it lives behind `m` rather than in a tab."""
+class ToolsScreen(ModalScreen[bool]):
+    """The project's software suite: the modules it uses, whether their tools are installed
+    on this machine and how to install what is missing; then the rest, to enable."""
 
-    BINDINGS = [Binding("escape,q,m", "dismiss(None)", "Close")]
+    BINDINGS = [Binding("escape,q,m", "close", "Close"),
+                Binding("e", "toggle", "Enable / disable for this project")]
 
-    def __init__(self, enabled: set[str]) -> None:
+    def __init__(self, project: Project) -> None:
         super().__init__()
-        self.enabled = enabled
+        self.project = project
+        self.changed = False
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog modules"):
-            yield Label("Modules", classes="dialog-title")
-            yield Static("● enabled in this project · ○ available · yellow: a tool is missing",
+            yield Label(f"Tools · {self.project.name}", classes="dialog-title")
+            yield Static("● this project uses it · ○ available · red: not installed here"
+                         "  ·  e enables or disables the module for this project",
                          classes="hint")
             yield DataTable(id="module-table", cursor_type="row")
 
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
-        table.add_columns("", "Module", "Kinds", "Tasks", "Tools · viewers", "Health")
-        for m in registry.all_modules().values():
+        table.add_columns("", "Module", "Used by", "On this machine")
+        self.fill()
+        table.focus()
+
+    def fill(self) -> None:
+        table = self.query_one(DataTable)
+        row = table.cursor_row
+        table.clear()
+        for m, used, studies in registry.suite(self.project):
             health = m.health()
             ok = all(c.ok for c in health)
-            tasks = [f"{m.id}.{t.id}" if t.id != "main" else m.id for t in m.tasks]
-            extras = [t.title for t in m.tools] + [f"{v.title} (view)" for v in m.viewers]
+            enabled = m.id in self.project.modules
+            usedby = ([("enabled", "dim")] if enabled else
+                      [("not enabled", "yellow")] if used else [])
+            usedby += [f"\n{k}" for k in studies]
+            missing = "red" if used else "dim yellow"
+            checks = Text("\n".join(f"{'✓' if c.ok else '✗'} {c.name}: {c.detail}"
+                                    for c in health) or "✓ nothing to install",
+                          "green" if ok else missing)
             table.add_row(
-                Text("●" if m.id in self.enabled else "○", "green" if ok else "yellow"),
-                Text.assemble((m.title, "bold"), "\n", (m.description, "dim")),
-                "\n".join(f"{k.icon} {k.id}" for k in m.kinds) or "-",
-                "\n".join(tasks) or "-", "\n".join(extras) or "-",
-                Text("\n".join(f"{'✓' if c.ok else '✗'} {c.name}: {c.detail}" for c in health)
-                     or "✓", "green" if ok else "yellow"),
-                height=max(2, len(health), len(tasks), len(extras), len(m.kinds)), key=m.id)
-        table.focus()
+                Text("●" if used else "○", ("green" if ok else "red") if used else "dim"),
+                Text.assemble((m.title, "bold" if used else ""), "\n",
+                              ("\n".join(textwrap.wrap(m.description, 44)), "dim")),
+                Text.assemble(*usedby) if usedby else "",
+                checks, height=max(1 + len(textwrap.wrap(m.description, 44)), len(health),
+                                   len(studies) + 1), key=m.id)
+        table.move_cursor(row=min(row, table.row_count - 1))
+
+    def action_toggle(self) -> None:
+        table = self.query_one(DataTable)
+        if not table.row_count:
+            return
+        key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
+        on = key not in self.project.modules
+        self.project.enable(key, on)
+        self.changed = True
+        self.notify(f"{registry.get(key).title} {'enabled' if on else 'disabled'} "
+                    "for this project (factory.toml)")
+        self.fill()
+
+    def action_close(self) -> None:
+        self.dismiss(self.changed)
 
 
 class HelpScreen(ModalScreen[None]):

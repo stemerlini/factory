@@ -62,10 +62,10 @@ from .screens import (
     ConfirmScreen,
     DecideScreen,
     HelpScreen,
-    ModulesScreen,
     NewStudyScreen,
     ProjectPicker,
     SubmitScreen,
+    ToolsScreen,
 )
 from .theme import omarchy_theme
 
@@ -132,7 +132,7 @@ class FactoryApp(App):
         Binding("Y", "accept_rest", "Accept the rest"),
         Binding("S", "submit_review", "Submit review"),
         Binding("c", "cancel_run", "Cancel run", show=False),
-        Binding("m", "modules", "Modules", show=False),
+        Binding("m", "modules", "Tools"),
         Binding("ctrl+o", "pick_project", "Projects"),
         Binding("ctrl+r", "refresh", "Reload", show=False),
         *(Binding(str(i % 10), f"tab('{t}')", t.title(), show=False)
@@ -843,7 +843,9 @@ class FactoryApp(App):
         self.query_one("#tabs", TabbedContent).active = tab
 
     def action_modules(self) -> None:
-        self.push_screen(ModulesScreen(set(self.project.modules) if self.project else set()))
+        if self.project:
+            self.push_screen(ToolsScreen(self.project),
+                             lambda changed: changed and self.action_refresh())
 
     def get_system_commands(self, screen: Screen) -> Iterable[SystemCommand]:
         """Every action by name in the command palette (ctrl+p), beside Textual's own."""
@@ -861,7 +863,8 @@ class FactoryApp(App):
             ("New study", "Add a study to this element", self.action_new_study),
             ("Lock this element", "Baseline it with a git tag", self.action_lock),
             ("Switch project", "Open, or create from a template", self.action_pick_project),
-            ("Modules", "Installed tools and what this project enables", self.action_modules),
+            ("Tools", "The project's software suite: what it uses and what is installed",
+             self.action_modules),
             ("Reload", "Re-read the project from disk", self.action_refresh),
         ):
             yield SystemCommand(name, help_, action)

@@ -16,8 +16,9 @@ See [PLAN.md](PLAN.md) for the vision, the model and the phases.
 <p align="center"><img src="assets/screenshot.png" alt="Factory's Home tab: what waits on you, next steps and the journey of each element" width="100%"></p>
 
 Tabs: **Home** · Gates · Requirements · Architecture · **Studies** (each study's runs, outputs
-and log beside it) · Files · **Agent** · Review · Journal, on `1`…`9`. `m` shows the modules
-and whether their tools are installed; `Ctrl+P` finds any action by name; `?` lists the keys.
+and log beside it) · Files · **Agent** · Review · Journal, on `1`…`9`. `m` shows the project's
+**tools**: the modules it uses (enabled, or needed by a study), whether each tool is installed
+on this machine and how to install it; `e` there enables or disables a module; `Ctrl+P` finds any action by name; `?` lists the keys.
 Passing a gate, locking a baseline or approving a proposal makes the factory in the top bar
 puff smoke and light its windows.
 

@@ -69,6 +69,17 @@ class Project:
         """This project's run store (outside git)."""
         return self.store_root / self.id
 
+    def enable(self, module: str, on: bool = True) -> None:
+        """Enable (or disable) a module for this project in its manifest."""
+        path = self.root / MANIFEST
+        data = tomllib.loads(path.read_text())
+        enabled = [m for m in data.setdefault("modules", {}).get("enabled", []) if m != module]
+        data["modules"]["enabled"] = enabled + [module] if on else enabled
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(tomli_w.dumps(data))
+        tmp.replace(path)
+        self.modules = data["modules"]["enabled"]
+
     # --- elements --------------------------------------------------------------------------
 
     def tree(self) -> Element:

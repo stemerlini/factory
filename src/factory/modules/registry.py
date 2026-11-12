@@ -5,8 +5,12 @@ from __future__ import annotations
 from functools import cache
 from importlib import import_module
 from importlib.metadata import entry_points
+from typing import TYPE_CHECKING
 
 from .api import ElementKind, Module, Task, Viewer
+
+if TYPE_CHECKING:
+    from ..project import Project
 
 BUILTIN = (
     "core", "script", "geant4", "irene", "pic", "ngspice", "kicad", "freecad", "software",
@@ -61,3 +65,14 @@ def viewer_for(path) -> Viewer | None:
             if any(path.match(g) for g in v.globs) and v.available():
                 return v
     return None
+
+
+def suite(project: Project) -> list[tuple[Module, bool, list[str]]]:
+    """Every module with whether the project uses it (enabled, or a study runs one of its
+    tasks) and the studies that do; the ones it uses first."""
+    studies: dict[str, list[str]] = {}
+    for s in project.studies():
+        studies.setdefault(s.module, []).append(s.key)
+    rows = [(m, m.id in project.modules or m.id in studies, studies.get(m.id, []))
+            for m in all_modules().values()]
+    return sorted(rows, key=lambda r: not r[1])
