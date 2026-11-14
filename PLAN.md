@@ -393,6 +393,9 @@ The particle-telescope and plasma-thruster trees live on as test fixtures.
 3b. ✓ **Environment** — IRENE (AE9/AP9) `irene.environment`: orbit → spectra (CSV), Geant4
    GPS sources, TID vs Al depth; `irene.run` for any hand-written input; `tools/build-irene`.
 4. **Geant4** — build toolchain; `factory-g4` generic app; stack → GDML; response; bowtie.
+   - 2026-11-14: Geant4 is installed by `tools/build-geant4` (source build, same toolchain
+     layout as IRENE), requested by a project whose analytic CSDA model needs scattering and
+     bremsstrahlung. The generic `factory-g4` application remains Phase 2.
 5. **Baselines** — lock/unlock, tags, frozen reports, change impact on children.
 6. **Electronics** — ngspice studies (metrics from `.meas`), KiCad ERC/DRC, BOM + Gerbers.
 7. **Mechanics** — FreeCAD/build123d, STEP export, FEA (CalculiX/Elmer), drawings.

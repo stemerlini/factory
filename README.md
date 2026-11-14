@@ -196,6 +196,14 @@ factory agent --sessions              # saved and running sessions
 (mean, a percentile, or a Monte Carlo confidence level) and writes orbit-average/peak spectra,
 Geant4 GPS source macros and total dose behind aluminium (`tid_<d>mm` metrics).
 
+## Monte Carlo transport (Geant4)
+
+`tools/build-geant4 [version]` builds Geant4 (default 11.4.3, multithreaded, GDML, all data
+sets, no GUI) into `~/.local/opt/geant4/<version>`. The EM option4 and Livermore physics lists
+are part of the build. The wrapper `bin/geant4.sh` exports the `G4*DATA` variables, so
+`factory modules` checks the datasets and `geant4.run` runs an application with a macro (for
+example the GPS macros `irene.environment` writes).
+
 ## Writing a module
 
 A module is a `factory.modules.api.Module` with tasks, tools, viewers, element kinds, file
