@@ -6,15 +6,13 @@ the one :class:`~factory.live.Live` session of the selected element."""
 
 from __future__ import annotations
 
-from rich.console import Group
-from rich.markdown import Markdown
 from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
 from textual.message import Message
-from textual.widgets import Input, Static
+from textual.widgets import Input, Markdown, Static
 
 from .. import acp, live
 
@@ -28,48 +26,88 @@ STATE_STYLE = {live.STARTING: ("starting…", "dim"), live.WORKING: ("working", 
 PLAN_MARK = {"completed": ("✓", "green"), "in_progress": ("◐", "cyan")}
 
 
-def render(session: live.Live | None, element: str) -> Group:
+def blocks(session: live.Live | None, element: str) -> list[str | Text]:
+    """The transcript as blocks: the agent's replies as Markdown source, everything between
+    them as one styled text. Both become widgets the user can select and copy from."""
     if session is None:
-        return Group(Text.assemble(
+        return [Text.assemble(
             ("No agent on ", "dim"), (element, "bold"), (" yet.\n\n", "dim"),
             ("a", "bold"), ("  start one here, briefed on this element (on a gate: that gate)\n",
                            "dim"),
-            ("A", "bold"), ("  open Claude Code in its own window instead", "dim")))
-    parts: list = []
+            ("A", "bold"), ("  open Claude Code in its own window instead", "dim"))]
+    found: list[str | Text] = []
+    lines: list[Text] = []
+
+    def line(text: Text) -> None:
+        lines.append(text)
+
+    def flush() -> None:
+        if lines:
+            found.append(Text("\n").join(lines))
+            lines.clear()
+
     for e in session.entries:
         if e.kind == "user":
             first = e.text.strip().splitlines()[0] if e.text.strip() else ""
             more = len(e.text.strip().splitlines()) - 1
-            parts += [Text(""), Text.assemble(("› ", "bold magenta"), (first, "bold"),
-                                              (f"  (+{more} lines)" if more > 0 else "", "dim"))]
+            line(Text(""))
+            line(Text.assemble(("› ", "bold magenta"), (first, "bold"),
+                               (f"  (+{more} lines)" if more > 0 else "", "dim")))
         elif e.kind == "agent":
-            parts.append(Markdown(e.text))
+            flush()
+            found.append(e.text)
         elif e.kind == "thought":
-            line = " ".join(e.text.split())
-            parts.append(Text("∴ " + (line[:117] + "…" if len(line) > 118 else line),
-                              "dim italic"))
+            text = " ".join(e.text.split())
+            line(Text("∴ " + (text[:117] + "…" if len(text) > 118 else text), "dim italic"))
         elif e.kind == "tool":
             symbol, style = STATUS_MARK.get(e.status, ("·", "dim"))
             icon = TOOL_ICON.get(e.raw.get("kind", ""), "·")
             detail = acp.command_of(e.raw) if e.raw.get("kind") == "execute" else e.text
-            lines = detail.splitlines() or [""]
-            parts.append(Text.assemble((f"  {symbol} ", style), (f"{icon} ", "bold"),
-                                       (lines[0], "" if e.status != "failed" else "red"),
-                                       (f"  (+{len(lines) - 1} lines)" if len(lines) > 1
-                                        else "", "dim")))
+            rows = detail.splitlines() or [""]
+            line(Text.assemble((f"  {symbol} ", style), (f"{icon} ", "bold"),
+                               (rows[0], "" if e.status != "failed" else "red"),
+                               (f"  (+{len(rows) - 1} lines)" if len(rows) > 1 else "",
+                                "dim")))
         elif e.kind == "plan":
             for step in e.raw.get("entries", []):
                 symbol, style = PLAN_MARK.get(step.get("status"), ("□", "dim"))
-                parts.append(Text.assemble((f"  {symbol} ", style), step.get("content", "")))
+                line(Text.assemble((f"  {symbol} ", style), step.get("content", "")))
         elif e.kind == "refused":
-            parts.append(Text.assemble(("  ⊘ refused ", "bold red"), (e.text, "red"),
-                                       ("  (committing, locking and deciding are yours)", "dim")))
+            line(Text.assemble(("  ⊘ refused ", "bold red"), (e.text, "red"),
+                               ("  (committing, locking and deciding are yours)", "dim")))
         elif e.kind == "error":
-            parts.append(Text("  ! " + e.text, "bold red"))
+            line(Text("  ! " + e.text, "bold red"))
     if session.state == live.STARTING:
-        parts.append(Text(f"Starting {session.title}… (the first start may download its "
-                          "ACP adapter)", "dim"))
-    return Group(*parts)
+        line(Text(f"Starting {session.title}… (the first start may download its "
+                  "ACP adapter)", "dim"))
+    flush()
+    return found
+
+
+class Transcript(Vertical):
+    """The conversation as a column of widgets, updated in place: only the blocks that
+    changed are re-rendered, so a streaming reply does not redraw the whole history."""
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.shown: list[str | Text] = []
+
+    def show(self, found: list[str | Text]) -> None:
+        widgets = list(self.children)
+        for i, block in enumerate(found):
+            if i < len(self.shown) and type(self.shown[i]) is type(block):
+                if self.shown[i] != block:
+                    widgets[i].update(block)
+                continue
+            for w in widgets[i:]:
+                w.remove()
+            self.mount_all(Markdown(b, classes="agent-reply") if isinstance(b, str) else
+                           Static(b, classes="agent-lines") for b in found[i:])
+            break
+        else:
+            for w in widgets[len(found):]:
+                w.remove()
+        self.shown = [b.copy() if isinstance(b, Text) else b for b in found]
 
 
 class Question(Vertical, can_focus=True):
@@ -125,9 +163,10 @@ class AgentPane(Vertical):
     def compose(self) -> ComposeResult:
         yield Static(classes="agent-head")
         with VerticalScroll(classes="agent-scroll"):
-            yield Static(classes="agent-transcript")
+            yield Transcript(classes="agent-transcript")
         yield Question(classes="agent-question")
-        yield Input(placeholder="Tell the agent…  (enter sends · esc stops it)",
+        yield Input(placeholder="Tell the agent…  (enter sends · esc stops it · "
+                          "drag to select, ctrl+c copies)",
                     classes="agent-input")
 
     def show(self, session: live.Live | None, element: str) -> None:
@@ -137,7 +176,12 @@ class AgentPane(Vertical):
             "  ", (state, style)))
         scroll = self.query_one(".agent-scroll", VerticalScroll)
         follow = scroll.scroll_y >= scroll.max_scroll_y - 2
-        self.query_one(".agent-transcript", Static).update(render(session, element))
+        transcript = self.query_one(Transcript)
+        if getattr(self, "_session", None) is not session:
+            self._session = session
+            transcript.remove_children()
+            transcript.shown = []
+        transcript.show(blocks(session, element))
         if follow:
             scroll.call_after_refresh(scroll.scroll_end, animate=False)
         question = self.query_one(Question)

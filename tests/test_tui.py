@@ -135,6 +135,13 @@ async def test_agent_pane_asks_and_remembers(make):
         await until(live.READY)
         said = [e.text for e in app.lives[""].entries if e.kind == "agent"]
         assert said[-1] == said[-3] == "reject-once allow-once allow-once allow-once"
+        drawer = app.query_one("#drawer", AgentPane)
+        for block in drawer.query(".agent-reply, .agent-lines"):
+            block.text_select_all()
+            assert app.screen.get_selected_text()  # every block of the transcript selects
+        drawer.query(".agent-reply").last().text_select_all()
+        await pilot.press("ctrl+c")
+        assert app.clipboard.strip() == "reject-once allow-once allow-once allow-once"
 
 
 def test_editor_command_splits_flags(monkeypatch, tmp_path):

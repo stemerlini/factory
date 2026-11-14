@@ -255,6 +255,32 @@ AgentPane {
     height: 1fr;
     padding: 0 1;
 }
+.agent-transcript {
+    height: auto;
+}
+.agent-lines {
+    height: auto;
+}
+.agent-reply {
+    height: auto;
+    margin: 1 0 0 0;
+    padding: 0;
+    background: transparent;
+}
+.agent-reply MarkdownBlock {
+    margin: 0;
+}
+.agent-reply MarkdownParagraph, .agent-reply MarkdownBulletList,
+.agent-reply MarkdownOrderedList, .agent-reply MarkdownFence {
+    margin: 0 0 1 0;
+}
+.agent-reply MarkdownHeader {
+    margin: 0 0 1 0;
+}
+.agent-reply MarkdownBulletList MarkdownParagraph,
+.agent-reply MarkdownOrderedList MarkdownParagraph {
+    margin: 0;
+}
 .agent-question {
     display: none;
     height: auto;

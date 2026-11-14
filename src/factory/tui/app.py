@@ -5,6 +5,7 @@ the project and starts runs as separate processes, so closing it never stops a s
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import shlex
 import shutil
@@ -838,6 +839,18 @@ class FactoryApp(App):
 
     def _tab(self) -> str:
         return self.query_one("#tabs", TabbedContent).active
+
+    def copy_to_clipboard(self, text: str) -> None:
+        # Textual copies with OSC 52, which not every terminal honours; wl-copy always works
+        # on Wayland.
+        super().copy_to_clipboard(text)
+        if self.is_headless:
+            return
+        if shutil.which("wl-copy"):
+            with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+                subprocess.run(["wl-copy"], input=text.encode(), timeout=2, check=False)
+        lines = len(text.splitlines())
+        self.notify(f"Copied {lines} line{'s' * (lines != 1)}", timeout=2)
 
     def action_tab(self, tab: str) -> None:
         self.query_one("#tabs", TabbedContent).active = tab
