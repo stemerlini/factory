@@ -134,6 +134,9 @@ find another way. Accepting and rejecting are the user's; never run
 AGENTS.md, propose before you build, deliver on a branch with a pull request, never merge,
 and hand back with `factory requests --close ID --branch B --pr URL -n "<what changed and how
 the project uses it>"`, or `--close ID --decline -n "<why>"` if it does not belong there.
+A `material` or `data` request is not a code change: add it locally to the tool's library
+with its own commands, no branch or pull request, and hand back with `--close ID -n "<what
+was added and where>"`.
 
 ## Where knowledge lives
 

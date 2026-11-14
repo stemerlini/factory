@@ -34,6 +34,8 @@ OPEN, SENT, DELIVERED = "open", "sent", "delivered"
 ACCEPTED, REJECTED, DECLINED = "accepted", "rejected", "declined"
 WAITING = (OPEN, SENT, DELIVERED)
 ENDED = (ACCEPTED, REJECTED, DECLINED)
+# Kinds that add to a tool's data (its library), not its code: done locally, no pull request.
+DATA_KINDS = ("material", "data")
 FACTORY = Path(__file__).resolve().parents[2]
 
 # How a development session works when its repository has no AGENTS.md of its own: the
@@ -301,8 +303,23 @@ def prompt(r: Request, repo: Path | None = None) -> str:
            if rules else f"This repository has no AGENTS.md; work by this loop:\n\n{LOOP}")
     project = (f" The project is at {r.root}; read what you need there, but do not change "
                "it." if r.root else "")
-    return (f"A {r.kind} request{origin}{where}, filed by its agent: {r.title}\n\n"
-            f"{r.body or '(no detail given)'}\n\nThe request is {r.path}.{project}\n\n"
+    head = (f"A {r.kind} request{origin}{where}, filed by its agent: {r.title}\n\n"
+            f"{r.body or '(no detail given)'}\n\nThe request is {r.path}.{project}\n\n")
+    if r.kind in DATA_KINDS:
+        return head + (
+            "This asks for data, not code: add it locally to the tool's own library or data "
+            "folder, with the tool's commands where it has them, and check the tool reads it "
+            "back. No branch, no commit, no pull request. First say what you will add and "
+            "where, and wait for my go-ahead. When it is done, run\n"
+            f"`factory requests --close {r.id} -n \"<what was added, where, and how the "
+            "project uses it>\"`.\n"
+            "If it needs code after all (a new kind of data, a missing calculation), say so "
+            f"and wait: that part goes by {rules[0] if rules else 'the loop below'}, on a "
+            f"branch with a pull request.{'' if rules else chr(10) * 2 + LOOP}\n"
+            "If it does not belong in this tool, say why and run "
+            f"`factory requests --close {r.id} --decline -n \"<why, and what the project "
+            "could do instead>\"`.")
+    return head + (
             f"{how}\n\n"
             "First say whether this belongs in this tool and how you would do it, and wait "
             "for my go-ahead. Deliver on a branch, with a pull request when the repository "

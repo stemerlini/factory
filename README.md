@@ -145,6 +145,10 @@ request:
 | `d` | open its pull request |
 | `h` | history: show accepted, rejected and declined requests too (hidden otherwise) |
 
+A `material` or `data` request adds to the tool's library rather than its code: the
+development session adds it locally, with no branch or pull request, and accepting it just
+records that you agree.
+
 When Herdr runs, the session opens as a tab in the tool's Herdr
 workspace (`factory-dev`, `citadel-dev`…, created if missing), where you watch it, steer it
 and answer its prompts. Otherwise it gets a terminal window. The session works by the

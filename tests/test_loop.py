@@ -203,4 +203,11 @@ def test_request_delivered_accepted_or_rejected(make, tmp_path, capsys):
     assert main(["requests", "--reject", "tool-2", "-n", "out of scope"]) == 0
     told = requests.report(requests.get("tool-2"))
     assert "out of scope" in told and "another way" in told
+
+    # A material is data for the tool's library, not a code change: no branch, no PR.
+    r = requests.file("tool", "GAGG", kind="material", project=p)
+    assert "--pr" not in requests.prompt(r) and "No branch" in requests.prompt(r)
+    assert main(["requests", "--close", r.id, "-n", "added to the library"]) == 0
+    assert main(["requests", "--accept", r.id]) == 0
+    assert requests.get(r.id).status == requests.ACCEPTED
     capsys.readouterr()
