@@ -19,7 +19,7 @@ FILE = ".factory/journal.jsonl"
 SNAPSHOT = ".factory/gates.json"
 # What each kind of entry looks like, for text and the TUI.
 MARKS = {"approve": "●", "lock": "◆", "decision": "?", "decided": "✓", "run": "▶",
-         "failed": "✗", "agent": "◇", "reject": "↺", "gate": "★", "note": "·"}
+         "failed": "✗", "agent": "◇", "reject": "↺", "gate": "★", "note": "·", "request": "⇢"}
 
 
 @dataclass

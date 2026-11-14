@@ -22,6 +22,7 @@ from . import (
     home,
     journal,
     pipeline,
+    requests,
     review,
     runs,
     trace,
@@ -347,6 +348,34 @@ def cmd_decide(args):
     out(args, decision_dict(d), f"{d.key}: {d.status}" + (f" ({d.chosen})" if d.chosen else ""))
 
 
+def request_dict(r: requests.Request) -> dict:
+    return {"id": r.id, "to": r.to, "kind": r.kind, "title": r.title, "status": r.status,
+            "created": r.created, "project": r.project, "root": r.root,
+            "element": r.element, "note": r.note, "body": r.body, "path": str(r.path)}
+
+
+def cmd_request(args):
+    try:
+        p = load(args)
+    except ProjectError:
+        p = None
+    r = requests.file(args.to, args.title, args.detail or "", args.kind, p, args.element or "")
+    out(args, request_dict(r), f"Filed {r.id} for {r.to}: {r.title} (the user sends it to a "
+                               "development session from Factory)")
+
+
+def cmd_requests(args):
+    if args.close:
+        r = requests.close(args.close, requests.DISMISSED if args.dismiss else requests.DONE,
+                           args.note or "")
+        out(args, request_dict(r), f"{r.id}: {r.status}")
+        return
+    found = requests.all_requests(args.to, args.all)
+    lines = [f"{r.id:14} {r.status:9} {r.kind:8} {r.title}" +
+             (f"  ({r.project})" if r.project else "") for r in found]
+    out(args, [request_dict(r) for r in found], "\n".join(lines) or "No requests waiting.")
+
+
 def cmd_review(args):
     p = load(args)
     found = review.changes(p)
@@ -569,6 +598,20 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("verdict", choices=("accept", "reject"))
     p.add_argument("--option", help="option to accept (default: the recommended one)")
     p.add_argument("--note", help="your reasoning, kept in the record")
+    p = add("request", cmd_request,
+            "ask one of your tools for a feature, fix, material or data this project needs")
+    p.add_argument("title")
+    p.add_argument("--to", required=True,
+                   help="the tool: factory, or another repo beside it (citadel, materia…)")
+    p.add_argument("-k", "--kind", default="feature", choices=requests.KINDS)
+    p.add_argument("-d", "--detail", help="what is missing, why, and what would do (Markdown)")
+    p.add_argument("-e", "--element", help="element it is for")
+    p = add("requests", cmd_requests, "requests to your tools; --close one when it is done")
+    p.add_argument("--to", help="only requests to this tool")
+    p.add_argument("--all", action="store_true", help="include done and dismissed")
+    p.add_argument("--close", metavar="ID", help="mark a request done (from its dev session)")
+    p.add_argument("--dismiss", action="store_true", help="with --close: declined, not done")
+    p.add_argument("-n", "--note", help="with --close: what changed and how to use it")
     add("review", cmd_review, "pending changes and the agent's proposal")
     p = add("approve", cmd_approve, "commit pending changes (all, an element's, or paths)")
     p.add_argument("paths", nargs="*")

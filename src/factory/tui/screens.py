@@ -26,7 +26,7 @@ from textual.widgets import (
 )
 from textual.widgets.option_list import Option
 
-from .. import agent, config, portal
+from .. import agent, config, portal, requests
 from ..model import STUDY_GATES, Element
 from ..modules import registry
 from ..project import MANIFEST, Project, ProjectError, create, slug, templates, write_study
@@ -404,6 +404,7 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 | `L` | lock the element (needs a commit and proven analysis) |
 | `c` | cancel the selected run |
 | `m` | tools: what the project uses, what is installed; `e` enables a module |
+| `R` | requests the agents filed to your tools; `enter` sends one to a dev session |
 | `ctrl+p` | command palette: every action by name |
 | `a` | agent: start (or show) this element's agent in the pane, briefed on it |
 | `ctrl+a` | show, focus or hide the agent pane; `esc` in it stops the agent |
@@ -495,3 +496,98 @@ class HelpScreen(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog wide"):
             yield Markdown(HELP)
+
+
+class RequestsScreen(ModalScreen[bool]):
+    """What the project agents asked of your tools. Enter sends a request to a development
+    session in the tool's repository; that session closes it when the change is in."""
+
+    BINDINGS = [Binding("escape,q,R", "close", "Close"),
+                Binding("x", "dismiss_request", "Dismiss"),
+                Binding("a", "toggle_all", "Show done")]
+
+    def __init__(self, project: Project | None) -> None:
+        super().__init__()
+        self.project = project
+        self.everything = False
+        self.changed = False
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="dialog modules"):
+            yield Label("Requests to your tools", classes="dialog-title")
+            yield Static("Features, fixes and materials your project agents found missing.  "
+                         "enter opens a dev session in the tool's repo with the request as "
+                         "its brief · x dismisses · a shows done ones", classes="hint")
+            yield DataTable(id="request-table", cursor_type="row")
+            yield Static(id="request-body", classes="detail")
+
+    def on_mount(self) -> None:
+        table = self.query_one(DataTable)
+        table.add_columns("", "Id", "Request", "To", "From", "Filed")
+        self.fill()
+        table.focus()
+
+    def fill(self) -> None:
+        table = self.query_one(DataTable)
+        row = table.cursor_row
+        table.clear()
+        self.found = {r.id: r for r in requests.all_requests(everything=self.everything)}
+        marks = {requests.OPEN: ("⇢", "cyan"), requests.SENT: ("…", "yellow"),
+                 requests.DONE: ("✓", "green"), requests.DISMISSED: ("✗", "dim")}
+        for r in self.found.values():
+            mine = self.project and r.root == str(self.project.root)
+            table.add_row(Text(*marks.get(r.status, ("·", ""))),
+                          Text(r.id, "bold"), Text.assemble(r.title, "  ", (r.kind, "dim")),
+                          r.to, Text(r.project or "", "" if mine else "dim"),
+                          requests.age(r), key=r.id)
+        if not self.found:
+            self.query_one("#request-body", Static).update(
+                "Nothing waiting. Project agents file requests with `factory request`.")
+        table.move_cursor(row=min(row, max(table.row_count - 1, 0)))
+
+    @on(DataTable.RowHighlighted)
+    def show(self, event: DataTable.RowHighlighted) -> None:
+        r = self.found.get(event.row_key.value) if event.row_key else None
+        if r:
+            self.query_one("#request-body", Static).update(Text.assemble(
+                (f"{r.status}", "bold"), f" · {r.kind} for {r.to}",
+                (f" · {r.project}{'/' + r.element if r.element else ''}" if r.project else ""),
+                "\n\n", r.body or "(no detail)",
+                ("\n\nDone: " + r.note if r.note else "", "green")))
+
+    def current(self):
+        table = self.query_one(DataTable)
+        if not table.row_count:
+            return None
+        return self.found[table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value]
+
+    @on(DataTable.RowSelected)
+    def send(self, _event=None) -> None:
+        r = self.current()
+        if not r:
+            return
+        try:
+            argv = requests.window(r)
+        except LookupError as e:
+            self.notify(str(e), severity="error")
+            return
+        self.app.launch(argv)
+        if r.status == requests.OPEN:
+            requests.close(r.id, requests.SENT)
+        self.changed = True
+        self.notify(f"Opened a {r.to} dev session for {r.id}")
+        self.fill()
+
+    def action_dismiss_request(self) -> None:
+        r = self.current()
+        if r and r.status in (requests.OPEN, requests.SENT):
+            requests.close(r.id, requests.DISMISSED, "dismissed by the user")
+            self.changed = True
+            self.fill()
+
+    def action_toggle_all(self) -> None:
+        self.everything = not self.everything
+        self.fill()
+
+    def action_close(self) -> None:
+        self.dismiss(self.changed)

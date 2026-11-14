@@ -101,6 +101,34 @@ Everything you create is a **draft** (`status: draft`).
 - **Long runs** (Geant4, PIC) start in the background with `factory run <key>`; follow
   them with `factory runs <key>` and `factory log <run-id>`.
 
+## Your tools, and asking for what is missing
+
+The project is built with the user's own tools; reach for them before anything else:
+
+- **Citadel** (`citadel` skill or MCP): papers, standards, books; cite by citekey.
+- **Materia** (`materia` MCP): material composition, density, stopping power, ranges.
+- **Factory modules and tasks** (`factory modules`, `factory tasks`): the engines studies run
+  (Geant4, IRENE, scripts…), with what is installed here.
+- **Pathfinder** (`pathfinder` MCP): the user's OneDrive files.
+- Other repositories beside Factory (`factory requests --help` lists the targets).
+
+When a tool falls short of what the work needs (no task for the model you need, a material
+Materia lacks, a missing parameter, a bug), **don't work around it quietly** with a
+throw-away script or a hand-typed constant. File a request to the tool:
+
+```sh
+factory request "IRENE task: AP9 percentile as a parameter" --to factory -k feature \
+  -e detector -d "S003 needs the 95th-percentile spectrum; irene.environment only gives mean. \
+  Proposed: a percentile parameter on the task."
+```
+
+Kinds: `feature`, `bug`, `material`, `data`, `update`. Say what is missing, why this project
+needs it, and what would do. Then name the request in the proposal and carry on with what it
+does not block (a clearly labelled first-order estimate is fine), or stop and say so. The
+user sends requests to a development session of the tool; when it is done, Home shows it and
+the user tells you to pick it up. In a tool's development session, close the request with
+`factory requests --close ID -n "<what changed and how to use it>"`.
+
 ## Where knowledge lives
 
 - Papers and books: Citadel, cited by citekey.
@@ -118,6 +146,7 @@ factory status | check | req [-e EL] | studies [-e EL] | gates [EL] | arch [EL]
 factory show KEY ; factory run KEY [-w] ; factory runs [KEY] ; factory log RUN ; factory cancel RUN
 factory decompose BLOCK [-e PARENT]
 factory review ; factory decisions [--open] ; factory ask TITLE -o A -o B [-r A] [-c TEXT] [-e EL]
+factory request TITLE --to TOOL [-k KIND] [-d TEXT] [-e EL] ; factory requests [--to TOOL] [--all]
 ```
 
 Element paths are `""` (the system), `fee`, `fee/adc`; study keys are `S001`, `fee/S001`.

@@ -6,9 +6,10 @@ studies), what each element should do next, and how far the project has come.
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass, field
 
-from . import decisions, gates, guide, journal, pipeline, review, trace
+from . import decisions, gates, guide, journal, pipeline, requests, review, trace
 from .model import Element
 from .project import Project
 
@@ -17,7 +18,7 @@ from .project import Project
 class Item:
     """Something waiting on the human. ``target`` says where Enter goes."""
 
-    kind: str  # review | decision | failed | stale | unlocked | problem
+    kind: str  # review | decision | failed | stale | unlocked | problem | request | answered
     text: str
     element: str = ""
     target: str = ""
@@ -75,6 +76,7 @@ def build(project: Project, elements: list[Element],
             if g.status == gates.UNLOCKED:
                 h.waiting.append(Item("unlocked", f"{e.title} {g.detail}", e.path, "lock"))
     h.waiting += [Item("problem", p) for p in trace.problems(project)]
+    h.waiting += requests_waiting(project)
 
     done = total = 0
     for e in elements:
@@ -94,6 +96,27 @@ def build(project: Project, elements: list[Element],
     h.recent = found[:recent]
     h.streak = journal.streak(found)
     return h
+
+
+def requests_waiting(project: Project, days: int = 7) -> list[Item]:
+    """This project's requests to its tools: those not yet sent to a development session,
+    and those done in the last week, so the user can tell the agent to pick them up."""
+    items = []
+    since = dt.datetime.now().astimezone() - dt.timedelta(days=days)
+    for r in requests.all_requests(everything=True):
+        if r.root != str(project.root):
+            continue
+        if r.status == requests.OPEN:
+            items.append(Item("request", f"Send {r.id} to {r.to}: {r.title}", r.element, r.id))
+        elif r.status == requests.DONE:
+            try:
+                recent = dt.datetime.fromisoformat(str(r.created)).astimezone() >= since
+            except ValueError:
+                recent = False
+            if recent:
+                items.append(Item("answered", f"{r.to} did {r.id}: {r.title}"
+                                  + (f" — {r.note}" if r.note else ""), r.element, r.id))
+    return items
 
 
 def load(project: Project) -> tuple[Home, dict[str, list[gates.GateState]]]:

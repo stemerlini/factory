@@ -227,3 +227,22 @@ async def test_agent_dialog_continues_last_session(make, monkeypatch):
         await pilot.pause()
     assert launched and launched[0][-3:] == ["claude", "--resume", "abc"]
     assert str(p.root) in launched[0]
+
+
+async def test_requests_screen_sends_to_a_dev_session(make, monkeypatch):
+    from factory import requests
+
+    p = make()
+    r = requests.file("factory", "Per-layer energy deposit", "S005 needs it", project=p)
+    launched = []
+    app = FactoryApp(p.root)
+    monkeypatch.setattr(app, "launch", launched.append)
+    async with app.run_test(size=(150, 44)) as pilot:
+        await pilot.press("R")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "RequestsScreen"
+        await pilot.press("enter")
+        await pilot.pause()
+    argv = launched[0]
+    assert str(requests.FACTORY) in argv and "factory requests --close factory-1" in argv[-1]
+    assert requests.get(r.id).status == requests.SENT

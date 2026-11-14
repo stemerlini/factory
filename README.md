@@ -19,6 +19,7 @@ Tabs: **Home** · Gates · Requirements · Architecture · **Studies** (each stu
 and log beside it) · Files · **Agent** · Review · Journal, on `1`…`9`. `m` shows the project's
 **tools**: the modules it uses (enabled, or needed by a study), whether each tool is installed
 on this machine and how to install it; `e` there enables or disables a module; `Ctrl+P` finds any action by name; `?` lists the keys.
+`R` shows **requests** to your tools (below).
 Passing a gate, locking a baseline or approving a proposal makes the factory in the top bar
 puff smoke and light its windows.
 
@@ -118,6 +119,26 @@ resetting, tagging, locking and deciding are always refused: the agent's changes
 the Review tab (`8`) with `.factory/proposal.md`, its handover to the next session. Every
 project carries `AGENTS.md` (and `CLAUDE.md`, which imports it) with these rules, and
 `factory skill install` gives Claude Code, Copilot and others the `factory` skill.
+
+### Requests to your tools
+
+The agent works with your other tools (Citadel, Materia, Factory's modules) and does not
+work around one that falls short. It files a request instead, a feature, bug, material,
+data or update for that tool, and names it in its proposal:
+
+```sh
+factory request "Geant4 task: per-layer energy deposit" --to factory -k feature -e detector \
+  -d "S005 needs the deposit in each layer; the task only reports the total."
+factory requests                      # what is waiting, from every project
+```
+
+Requests from every project collect in `~/.local/share/factory/requests`, one Markdown file
+each. A request can go to Factory or to any git repository beside it (`~/Projects/materia`…),
+or to one named under `[tools]` in the config. Home lists the project's unsent requests;
+`R` lists them all, and `enter` opens a development session (your agent, in the tool's
+repository, briefed with the request), which first proposes how to do it. When the change
+is in, that session runs `factory requests --close ID -n "<what changed>"`; Home and the
+journal then tell you, and you tell the project's agent to pick it up.
 
 ### Reviewing the agent's work
 

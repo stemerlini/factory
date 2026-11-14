@@ -65,6 +65,7 @@ from .screens import (
     HelpScreen,
     NewStudyScreen,
     ProjectPicker,
+    RequestsScreen,
     SubmitScreen,
     ToolsScreen,
 )
@@ -97,10 +98,11 @@ TABS = ("home", "gates", "requirements", "architecture", "studies", "files", "ag
         "journal")
 WAITING_MARK = {"review": ("●", "magenta"), "decision": ("?", "yellow"), "failed": ("✗", "red"),
                 "stale": ("●", "yellow"), "unlocked": ("◆", "red"), "problem": ("!", "red"),
-                "agent": ("?", "bold magenta")}
+                "agent": ("?", "bold magenta"), "request": ("⇢", "cyan"),
+                "answered": ("✓", "green")}
 JOURNAL_STYLE = {"approve": "green", "lock": "magenta", "decision": "yellow", "decided": "green",
                  "run": "cyan", "failed": "red", "agent": "blue", "reject": "yellow",
-                 "gate": "bold yellow"}
+                 "gate": "bold yellow", "request": "cyan"}
 DIFF_STYLE = {"+": "green", "-": "red", "@": "cyan"}
 
 
@@ -134,6 +136,7 @@ class FactoryApp(App):
         Binding("S", "submit_review", "Submit review"),
         Binding("c", "cancel_run", "Cancel run", show=False),
         Binding("m", "modules", "Tools"),
+        Binding("R", "requests", "Requests", show=False),
         Binding("ctrl+o", "pick_project", "Projects"),
         Binding("ctrl+r", "refresh", "Reload", show=False),
         *(Binding(str(i % 10), f"tab('{t}')", t.title(), show=False)
@@ -583,6 +586,8 @@ class FactoryApp(App):
                 pass
         elif item.kind == "problem":
             self.action_tab("requirements")
+        elif item.kind in ("request", "answered"):
+            self.action_requests()
         else:
             self.action_tab("gates")
 
@@ -860,6 +865,10 @@ class FactoryApp(App):
             self.push_screen(ToolsScreen(self.project),
                              lambda changed: changed and self.action_refresh())
 
+    def action_requests(self) -> None:
+        self.push_screen(RequestsScreen(self.project),
+                         lambda changed: changed and self.action_refresh())
+
     def get_system_commands(self, screen: Screen) -> Iterable[SystemCommand]:
         """Every action by name in the command palette (ctrl+p), beside Textual's own."""
         yield from super().get_system_commands(screen)
@@ -878,6 +887,8 @@ class FactoryApp(App):
             ("Switch project", "Open, or create from a template", self.action_pick_project),
             ("Tools", "The project's software suite: what it uses and what is installed",
              self.action_modules),
+            ("Requests to your tools", "Features, fixes and materials the agents asked for; "
+             "send one to a development session", self.action_requests),
             ("Reload", "Re-read the project from disk", self.action_refresh),
         ):
             yield SystemCommand(name, help_, action)

@@ -152,3 +152,24 @@ def test_agent_sessions_continue_and_handover(make, capsys):
     (p.root / review.PROPOSAL).parent.mkdir(exist_ok=True)
     (p.root / review.PROPOSAL).write_text("Mass budget\n\n## Where I stopped\n")
     assert ".factory/proposal.md: read it first" in agent.brief(p, p.tree())
+
+
+def test_requests_round_trip_to_the_project(make, capsys):
+    from factory import home, journal
+
+    p = make()
+    assert main(["request", "Per-layer energy deposit", "--to", "factory", "-e", "fee",
+                 "-d", "S005 needs it", "-C", str(p.root), "--json"]) == 0
+    r = json.loads(capsys.readouterr().out)
+    assert (r["id"], r["status"], r["root"]) == ("factory-1", "open", str(p.root))
+    assert [i.kind for i in home.requests_waiting(p)] == ["request"]
+    assert main(["request", "x", "--to", "nosuchtool", "-C", str(p.root)]) == 2
+    capsys.readouterr()
+
+    assert main(["requests", "--close", "factory-1", "-n", "use layers=true"]) == 0
+    capsys.readouterr()
+    assert main(["requests", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+    answered = home.requests_waiting(p)
+    assert [i.kind for i in answered] == ["answered"] and "use layers=true" in answered[0].text
+    assert [e.kind for e in journal.events(p)][:2] == ["request", "request"]

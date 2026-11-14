@@ -11,6 +11,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 def isolated(tmp_path, monkeypatch):
     """Keep config and run store inside the test's temp dir."""
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
     monkeypatch.setattr(project_mod, "DEFAULT_STORE", tmp_path / "store")
     for var in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"):
