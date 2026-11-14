@@ -24,6 +24,24 @@ def test_new_projects_carry_guardrails(make):
     assert "factory lock" in (p.root / "AGENTS.md").read_text()
     (p.root / "CLAUDE.md").unlink()
     assert agent.ensure_files(p) == ["CLAUDE.md"]
+    assert agent.ensure_files(p) == []
+
+
+def test_old_guardrails_are_brought_up_to_date(make):
+    # Projects made before a guardrail changed keep their own deny rules and edits to other
+    # files, but learn the new rules (here: requests to tools, and who accepts them).
+    p = make()
+    settings = p.root / ".claude/settings.json"
+    settings.write_text(json.dumps({"model": "x", "permissions": {
+        "deny": ["Bash(git commit *)", "Bash(rm -rf *)"]}}))
+    (p.root / "AGENTS.md").write_text("# Factory project\n\nOld rules.\n")
+    assert sorted(agent.ensure_files(p)) == [".claude/settings.json", "AGENTS.md"]
+    data = json.loads(settings.read_text())
+    assert data["model"] == "x"
+    assert {"Bash(rm -rf *)", "Bash(gh pr merge *)"} <= set(data["permissions"]["deny"])
+    assert "factory request" in (p.root / "AGENTS.md").read_text()
+    (p.root / "AGENTS.md").write_text("# My own rules\n")
+    assert agent.ensure_files(p) == []
 
 
 def test_ask_and_decide(make):

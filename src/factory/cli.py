@@ -446,7 +446,7 @@ def cmd_agent(args):
         argv = (agent.window_command(p, e, task, args.gate) if args.window
                 else agent.command(p, e, task, args.gate))
     for rel in agent.ensure_files(p):
-        print(f"Added {rel} (agent guardrails; approve it in the Review tab)", file=sys.stderr)
+        print(f"Wrote {rel} (agent guardrails; approve it in the Review tab)", file=sys.stderr)
     if args.window:
         subprocess.Popen(argv, cwd=p.root, start_new_session=True)
         return

@@ -1305,7 +1305,7 @@ class FactoryApp(App):
             return
         written = agent.ensure_files(p)
         if written:
-            self.notify(f"Added agent guardrails: {', '.join(written)} (review them)")
+            self.notify(f"Agent guardrails written: {', '.join(written)} (review them)")
         session = self.lives[e.path] = live.Live(p, e.path, live.default_name(p),
                                                  self.agent_changed)
         what = f"{e.title}: {dict(GATES_ORDER)[gate]}" if gate else e.title
@@ -1486,7 +1486,7 @@ class FactoryApp(App):
                 return
             written = agent.ensure_files(p)
             if written:
-                self.notify(f"Added agent guardrails: {', '.join(written)} (review them)")
+                self.notify(f"Agent guardrails written: {', '.join(written)} (review them)")
             if action in ("continue", "fork"):
                 self.launch(agent.window(p, agent.resume_command(found[0], action == "fork")))
                 self.notify("Continuing the last agent session")

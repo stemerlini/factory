@@ -254,12 +254,31 @@ def install_skill() -> list[Path]:
 
 
 def ensure_files(project: Project) -> list[str]:
-    """Write the agent guardrails if a project lacks them. Returns the files written."""
+    """Write the agent guardrails a project lacks, and bring Factory's own up to date: the
+    deny list gains new rules (the project's own stay), and an AGENTS.md Factory wrote is
+    replaced by the current one. Changes show in the Review tab. Returns the files written."""
     written = []
     for rel, text in GUARDRAILS:
         path = project.root / rel
-        if not path.exists():
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text)
-            written.append(rel)
+        new = text
+        if path.exists():
+            old = path.read_text()
+            if rel == "AGENTS.md" and old.startswith("# Factory project"):
+                pass
+            elif rel == ".claude/settings.json":
+                try:
+                    data = json.loads(old)
+                    deny = data.setdefault("permissions", {}).setdefault("deny", [])
+                except (ValueError, AttributeError):
+                    continue
+                missing = [r for r in json.loads(text)["permissions"]["deny"] if r not in deny]
+                deny.extend(missing)
+                new = json.dumps(data, indent=2) + "\n" if missing else old
+            else:
+                continue
+            if new == old:
+                continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(new)
+        written.append(rel)
     return written
