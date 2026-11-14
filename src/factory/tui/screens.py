@@ -229,18 +229,21 @@ class CommentScreen(ModalScreen[str | None]):
     BINDINGS = [Binding("escape", "dismiss(None)", "Close"),
                 Binding("ctrl+s", "save", "Save", priority=True)]
 
-    def __init__(self, path: str, text: str = "") -> None:
+    def __init__(self, path: str, text: str = "", title: str = "Comment",
+                 hint: str = "What should change? The agent gets it when you submit the "
+                 "review. ctrl+s saves; empty removes the comment.",
+                 button: str = "Save comment") -> None:
         super().__init__()
         self.path, self.text = path, text
+        self.title_, self.hint, self.button = title, hint, button
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog wide"):
-            yield Label("Comment", classes="dialog-title")
+            yield Label(self.title_, classes="dialog-title")
             yield Static(Text.assemble(("on ", "dim"), self.path), classes="hint")
             yield TextArea(self.text, id="comment", classes="comment")
-            yield Static("What should change? The agent gets it when you submit the review. "
-                         "ctrl+s saves; empty removes the comment.", classes="hint")
-            yield Button("Save comment", variant="primary", id="save")
+            yield Static(self.hint, classes="hint")
+            yield Button(self.button, variant="primary", id="save")
 
     def on_mount(self) -> None:
         self.query_one(TextArea).focus()
@@ -404,7 +407,7 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 | `L` | lock the element (needs a commit and proven analysis) |
 | `c` | cancel the selected run |
 | `m` | tools: what the project uses, what is installed; `e` enables a module |
-| `R` | requests the agents filed to your tools; `enter` sends one to a dev session |
+| `R` | requests to your tools: `enter` dev session (Herdr), `y` accept, `x` reject |
 | `ctrl+p` | command palette: every action by name |
 | `a` | agent: start (or show) this element's agent in the pane, briefed on it |
 | `ctrl+a` | show, focus or hide the agent pane; `esc` in it stops the agent |
@@ -499,31 +502,39 @@ class HelpScreen(ModalScreen[None]):
 
 
 class RequestsScreen(ModalScreen[bool]):
-    """What the project agents asked of your tools. Enter sends a request to a development
-    session in the tool's repository; that session closes it when the change is in."""
+    """What the project agents asked of your tools. Enter hands a request to a development
+    session (in Herdr when it runs); the session delivers a branch or pull request, which
+    you accept (merge) or reject here. Either way the project's agent hears of it."""
 
     BINDINGS = [Binding("escape,q,R", "close", "Close"),
-                Binding("x", "dismiss_request", "Dismiss"),
-                Binding("a", "toggle_all", "Show done")]
+                Binding("y", "accept", "Accept (merge)"),
+                Binding("x", "reject", "Reject"),
+                Binding("d", "diff", "Pull request"),
+                Binding("a", "toggle_all", "Show ended")]
+    MARKS = {requests.OPEN: ("⇢", "cyan"), requests.SENT: ("…", "yellow"),
+             requests.DELIVERED: ("●", "bold cyan"), requests.ACCEPTED: ("✓", "green"),
+             requests.REJECTED: ("✗", "red"), requests.DECLINED: ("✗", "dim")}
 
     def __init__(self, project: Project | None) -> None:
         super().__init__()
         self.project = project
         self.everything = False
         self.changed = False
+        self.found: dict[str, requests.Request] = {}
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog modules"):
             yield Label("Requests to your tools", classes="dialog-title")
             yield Static("Features, fixes and materials your project agents found missing.  "
-                         "enter opens a dev session in the tool's repo with the request as "
-                         "its brief · x dismisses · a shows done ones", classes="hint")
+                         "enter: hand it to a dev session in the tool's repo (Herdr) · "
+                         "y accept the delivered change (merge) · x reject · d its pull "
+                         "request · a show ended ones", classes="hint")
             yield DataTable(id="request-table", cursor_type="row")
             yield Static(id="request-body", classes="detail")
 
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
-        table.add_columns("", "Id", "Request", "To", "From", "Filed")
+        table.add_columns("", "Id", "Request", "To", "From", "Status", "Filed")
         self.fill()
         table.focus()
 
@@ -532,13 +543,11 @@ class RequestsScreen(ModalScreen[bool]):
         row = table.cursor_row
         table.clear()
         self.found = {r.id: r for r in requests.all_requests(everything=self.everything)}
-        marks = {requests.OPEN: ("⇢", "cyan"), requests.SENT: ("…", "yellow"),
-                 requests.DONE: ("✓", "green"), requests.DISMISSED: ("✗", "dim")}
         for r in self.found.values():
             mine = self.project and r.root == str(self.project.root)
-            table.add_row(Text(*marks.get(r.status, ("·", ""))),
-                          Text(r.id, "bold"), Text.assemble(r.title, "  ", (r.kind, "dim")),
-                          r.to, Text(r.project or "", "" if mine else "dim"),
+            table.add_row(Text(*self.MARKS.get(r.status, ("·", ""))), Text(r.id, "bold"),
+                          Text.assemble(r.title, "  ", (r.kind, "dim")), r.to,
+                          Text(r.project or "", "" if mine else "dim"), r.status,
                           requests.age(r), key=r.id)
         if not self.found:
             self.query_one("#request-body", Static).update(
@@ -548,42 +557,81 @@ class RequestsScreen(ModalScreen[bool]):
     @on(DataTable.RowHighlighted)
     def show(self, event: DataTable.RowHighlighted) -> None:
         r = self.found.get(event.row_key.value) if event.row_key else None
-        if r:
-            self.query_one("#request-body", Static).update(Text.assemble(
-                (f"{r.status}", "bold"), f" · {r.kind} for {r.to}",
-                (f" · {r.project}{'/' + r.element if r.element else ''}" if r.project else ""),
-                "\n\n", r.body or "(no detail)",
-                ("\n\nDone: " + r.note if r.note else "", "green")))
+        if not r:
+            return
+        where = [f"branch {r.branch}"] if r.branch else []
+        where += [r.pr] if r.pr else []
+        where += [f"Herdr agent {r.session}"] if r.session else []
+        self.query_one("#request-body", Static).update(Text.assemble(
+            (r.status, "bold"), f" · {r.kind} for {r.to}",
+            (f" · {r.project}{'/' + r.element if r.element else ''}" if r.project else ""),
+            (f"\n{' · '.join(where)}" if where else "", "dim"),
+            "\n\n", r.body or "(no detail)",
+            (f"\n\n{r.status.title()}: {r.note}" if r.note and r.status != requests.OPEN
+             else "", "green" if r.status in (requests.DELIVERED, requests.ACCEPTED)
+             else "yellow"),
+            ("\n\n" + requests.changes(r) if r.status == requests.DELIVERED else "", "dim")))
 
-    def current(self):
+    def current(self) -> requests.Request | None:
         table = self.query_one(DataTable)
         if not table.row_count:
             return None
         return self.found[table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value]
+
+    def act(self, fn, *args) -> None:
+        """Run a request action (git, gh and herdr take a moment) off the UI thread."""
+        def run() -> None:
+            try:
+                said = fn(*args)
+            except (RuntimeError, LookupError, ValueError, OSError) as e:
+                self.app.call_from_thread(self.notify, str(e), severity="error", timeout=10)
+                return
+            self.changed = True
+            self.app.call_from_thread(self.notify, said)
+            self.app.call_from_thread(self.fill)
+
+        self.run_worker(run, thread=True, group="requests")
 
     @on(DataTable.RowSelected)
     def send(self, _event=None) -> None:
         r = self.current()
         if not r:
             return
-        try:
-            argv = requests.window(r)
-        except LookupError as e:
-            self.notify(str(e), severity="error")
+        if r.status in requests.ENDED:
+            self.notify(f"{r.id} is {r.status}; nothing to send")
             return
-        self.app.launch(argv)
-        if r.status == requests.OPEN:
-            requests.close(r.id, requests.SENT)
-        self.changed = True
-        self.notify(f"Opened a {r.to} dev session for {r.id}")
-        self.fill()
+        self.notify(f"Handing {r.id} to a {r.to} development session…")
+        say = lambda text: self.app.call_from_thread(self.notify, text, timeout=15)  # noqa: E731
+        self.act(requests.send, r, say)
 
-    def action_dismiss_request(self) -> None:
+    def action_accept(self) -> None:
         r = self.current()
-        if r and r.status in (requests.OPEN, requests.SENT):
-            requests.close(r.id, requests.DISMISSED, "dismissed by the user")
-            self.changed = True
-            self.fill()
+        if not r or r.status != requests.DELIVERED:
+            self.notify("Only a delivered change can be accepted", severity="warning")
+            return
+        self.act(lambda: f"Merged {requests.accept(r.id).id}; tell the agent from Home")
+
+    def action_reject(self) -> None:
+        r = self.current()
+        if not r or r.status in requests.ENDED:
+            return
+
+        def done(reason: str | None) -> None:
+            if reason:
+                self.act(lambda: f"Rejected {requests.reject(r.id, reason).id}; the agent "
+                                 "will look for another way (Home)")
+
+        self.app.push_screen(CommentScreen(
+            r.id, title="Reject", hint="Why not? The project's agent gets this and looks for "
+            "another way; a pull request is closed with it. ctrl+s rejects.",
+            button="Reject"), done)
+
+    def action_diff(self) -> None:
+        r = self.current()
+        if r and r.pr:
+            self.app.launch(["xdg-open", r.pr])
+        elif r:
+            self.notify("No pull request yet", severity="warning")
 
     def action_toggle_all(self) -> None:
         self.everything = not self.everything

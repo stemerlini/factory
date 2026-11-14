@@ -229,20 +229,32 @@ async def test_agent_dialog_continues_last_session(make, monkeypatch):
     assert str(p.root) in launched[0]
 
 
-async def test_requests_screen_sends_to_a_dev_session(make, monkeypatch):
+async def test_requests_go_to_the_tools_herdr_workspace(make, monkeypatch):
     from factory import requests
 
     p = make()
     r = requests.file("factory", "Per-layer energy deposit", "S005 needs it", project=p)
-    launched = []
+    calls = []
+
+    def herdr(*args):
+        calls.append(args)
+        if args[:2] == ("agent", "get"):
+            raise RuntimeError("agent_not_found")
+        return {"workspaces": [{"label": "Factory-dev", "workspace_id": "w3"}]} \
+            if args[:2] == ("workspace", "list") else {"root_pane": {"pane_id": "w3:p2"}}
+
+    monkeypatch.setattr(requests, "herdr_running", lambda: True)
+    monkeypatch.setattr(requests, "herdr", herdr)
     app = FactoryApp(p.root)
-    monkeypatch.setattr(app, "launch", launched.append)
     async with app.run_test(size=(150, 44)) as pilot:
         await pilot.press("R")
         await pilot.pause()
-        assert app.screen.__class__.__name__ == "RequestsScreen"
         await pilot.press("enter")
-        await pilot.pause()
-    argv = launched[0]
-    assert str(requests.FACTORY) in argv and "factory requests --close factory-1" in argv[-1]
+        for _ in range(50):
+            if requests.get(r.id).status == requests.SENT:
+                break
+            await pilot.pause(0.05)
+    assert calls[2][:4] == ("tab", "create", "--workspace", "w3")
+    assert calls[3][:3] == ("agent", "start", "req-factory-1")
+    assert "--close factory-1 --branch" in calls[4][3] and "AGENTS.md" in calls[4][3]
     assert requests.get(r.id).status == requests.SENT

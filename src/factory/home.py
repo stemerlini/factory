@@ -6,7 +6,6 @@ studies), what each element should do next, and how far the project has come.
 
 from __future__ import annotations
 
-import datetime as dt
 from dataclasses import dataclass, field
 
 from . import decisions, gates, guide, journal, pipeline, requests, review, trace
@@ -18,7 +17,8 @@ from .project import Project
 class Item:
     """Something waiting on the human. ``target`` says where Enter goes."""
 
-    kind: str  # review | decision | failed | stale | unlocked | problem | request | answered
+    # review | decision | failed | stale | unlocked | problem | request | delivered | outcome
+    kind: str
     text: str
     element: str = ""
     target: str = ""
@@ -98,24 +98,23 @@ def build(project: Project, elements: list[Element],
     return h
 
 
-def requests_waiting(project: Project, days: int = 7) -> list[Item]:
-    """This project's requests to its tools: those not yet sent to a development session,
-    and those done in the last week, so the user can tell the agent to pick them up."""
+def requests_waiting(project: Project) -> list[Item]:
+    """This project's requests to its tools that need the user: to send one to a
+    development session, to accept or reject a delivered change, or to tell the agent how
+    one ended (pick it up, or find another way)."""
     items = []
-    since = dt.datetime.now().astimezone() - dt.timedelta(days=days)
     for r in requests.all_requests(everything=True):
         if r.root != str(project.root):
             continue
         if r.status == requests.OPEN:
             items.append(Item("request", f"Send {r.id} to {r.to}: {r.title}", r.element, r.id))
-        elif r.status == requests.DONE:
-            try:
-                recent = dt.datetime.fromisoformat(str(r.created)).astimezone() >= since
-            except ValueError:
-                recent = False
-            if recent:
-                items.append(Item("answered", f"{r.to} did {r.id}: {r.title}"
-                                  + (f" — {r.note}" if r.note else ""), r.element, r.id))
+        elif r.status == requests.DELIVERED:
+            items.append(Item("delivered", f"Accept or reject {r.id} from {r.to}: {r.title}",
+                              r.element, r.id))
+        elif r.status in requests.ENDED and not r.told:
+            then = ("tell the agent to pick it up" if r.status == requests.ACCEPTED else
+                    "tell the agent to find another way")
+            items.append(Item("outcome", f"{r.id} {r.status}: {then}", r.element, r.id))
     return items
 
 

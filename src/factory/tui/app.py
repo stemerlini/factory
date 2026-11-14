@@ -47,6 +47,7 @@ from .. import (
     journal,
     live,
     pipeline,
+    requests,
     review,
     runs,
     trace,
@@ -99,7 +100,7 @@ TABS = ("home", "gates", "requirements", "architecture", "studies", "files", "ag
 WAITING_MARK = {"review": ("●", "magenta"), "decision": ("?", "yellow"), "failed": ("✗", "red"),
                 "stale": ("●", "yellow"), "unlocked": ("◆", "red"), "problem": ("!", "red"),
                 "agent": ("?", "bold magenta"), "request": ("⇢", "cyan"),
-                "answered": ("✓", "green")}
+                "delivered": ("●", "cyan"), "outcome": ("↩", "cyan")}
 JOURNAL_STYLE = {"approve": "green", "lock": "magenta", "decision": "yellow", "decided": "green",
                  "run": "cyan", "failed": "red", "agent": "blue", "reject": "yellow",
                  "gate": "bold yellow", "request": "cyan"}
@@ -586,8 +587,12 @@ class FactoryApp(App):
                 pass
         elif item.kind == "problem":
             self.action_tab("requirements")
-        elif item.kind in ("request", "answered"):
+        elif item.kind in ("request", "delivered"):
             self.action_requests()
+        elif item.kind == "outcome":
+            self.tell_agent(requests.report(requests.get(item.target)))
+            requests.mark_told(item.target)
+            self.refresh_home()
         else:
             self.action_tab("gates")
 

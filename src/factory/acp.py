@@ -25,7 +25,9 @@ PROTOCOL_VERSION = 1
 # Agents never commit, rewrite history, lock or decide: those are the user's, in Review.
 FORBIDDEN = re.compile(
     r"\bgit(?:\s+-\S+(?:\s+(?!-)\S+)?)*\s+(commit|push|reset|checkout|restore|tag|rebase)\b"
-    r"|\bfactory\s+(lock|decide|approve|reject)\b")
+    r"|\bfactory\s+(lock|decide|approve|reject)\b"
+    r"|\bfactory\s+requests\b.*\s--(accept|reject)\b"
+    r"|\bgh\s+pr\s+merge\b")
 ALLOW, DENY, ASK = "allow", "deny", "ask"
 SAFE_KINDS = {"read", "search", "think", "fetch"}
 EDIT_KINDS = {"edit", "delete", "move"}

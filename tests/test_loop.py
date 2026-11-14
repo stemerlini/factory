@@ -154,22 +154,35 @@ def test_agent_sessions_continue_and_handover(make, capsys):
     assert ".factory/proposal.md: read it first" in agent.brief(p, p.tree())
 
 
-def test_requests_round_trip_to_the_project(make, capsys):
-    from factory import home, journal
+def test_request_delivered_accepted_or_rejected(make, tmp_path, capsys):
+    from factory import config, home, requests
 
+    tool = tmp_path / "tool"
+    tool.mkdir()
+    for cmd in (["init", "-q", "-b", "main"], ["commit", "-q", "--allow-empty", "-m", "a"],
+                ["switch", "-q", "-c", "feat/layers"],
+                ["commit", "-q", "--allow-empty", "-m", "b"]):
+        subprocess.run(["git", *cmd], cwd=tool, check=True)
+    config.save({"tools": {"tool": str(tool)}})
     p = make()
-    assert main(["request", "Per-layer energy deposit", "--to", "factory", "-e", "fee",
-                 "-d", "S005 needs it", "-C", str(p.root), "--json"]) == 0
-    r = json.loads(capsys.readouterr().out)
-    assert (r["id"], r["status"], r["root"]) == ("factory-1", "open", str(p.root))
-    assert [i.kind for i in home.requests_waiting(p)] == ["request"]
-    assert main(["request", "x", "--to", "nosuchtool", "-C", str(p.root)]) == 2
-    capsys.readouterr()
+    kinds = lambda: [i.kind for i in home.requests_waiting(p)]  # noqa: E731
 
-    assert main(["requests", "--close", "factory-1", "-n", "use layers=true"]) == 0
+    assert main(["request", "Per-layer deposit", "--to", "tool", "-d", "S005 needs it",
+                 "-C", str(p.root)]) == 0
+    assert kinds() == ["request"]
+    assert main(["request", "x", "--to", "nosuchtool", "-C", str(p.root)]) == 2
+    assert main(["requests", "--close", "tool-1", "--branch", "feat/layers",
+                 "-n", "use layers=true"]) == 0
+    assert kinds() == ["delivered"]
+    assert main(["requests", "--accept", "tool-1"]) == 0
+    git = lambda *a: subprocess.run(["git", *a], cwd=tool, capture_output=True,  # noqa: E731
+                                    text=True).stdout.strip()
+    assert git("branch", "--show-current") == "main" and git("log", "-1", "--format=%s") == "b"
+    assert kinds() == ["outcome"]
+    assert "Pick it up" in requests.report(requests.get("tool-1"))
+
+    requests.file("tool", "Other", project=p)
+    assert main(["requests", "--reject", "tool-2", "-n", "out of scope"]) == 0
+    told = requests.report(requests.get("tool-2"))
+    assert "out of scope" in told and "another way" in told
     capsys.readouterr()
-    assert main(["requests", "--json"]) == 0
-    assert json.loads(capsys.readouterr().out) == []
-    answered = home.requests_waiting(p)
-    assert [i.kind for i in answered] == ["answered"] and "use layers=true" in answered[0].text
-    assert [e.kind for e in journal.events(p)][:2] == ["request", "request"]

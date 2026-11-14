@@ -125,9 +125,15 @@ factory request "IRENE task: AP9 percentile as a parameter" --to factory -k feat
 Kinds: `feature`, `bug`, `material`, `data`, `update`. Say what is missing, why this project
 needs it, and what would do. Then name the request in the proposal and carry on with what it
 does not block (a clearly labelled first-order estimate is fine), or stop and say so. The
-user sends requests to a development session of the tool; when it is done, Home shows it and
-the user tells you to pick it up. In a tool's development session, close the request with
-`factory requests --close ID -n "<what changed and how to use it>"`.
+user sends requests to a development session of the tool, then accepts or rejects what it
+delivers. You hear the outcome: pick the change up, or, if it was rejected or declined,
+find another way. Accepting and rejecting are the user's; never run
+`factory requests --accept/--reject`.
+
+**In a tool's development session** (your brief is a request), work by that repository's
+AGENTS.md, propose before you build, deliver on a branch with a pull request, never merge,
+and hand back with `factory requests --close ID --branch B --pr URL -n "<what changed and how
+the project uses it>"`, or `--close ID --decline -n "<why>"` if it does not belong there.
 
 ## Where knowledge lives
 

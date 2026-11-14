@@ -351,7 +351,8 @@ def cmd_decide(args):
 def request_dict(r: requests.Request) -> dict:
     return {"id": r.id, "to": r.to, "kind": r.kind, "title": r.title, "status": r.status,
             "created": r.created, "project": r.project, "root": r.root,
-            "element": r.element, "note": r.note, "body": r.body, "path": str(r.path)}
+            "element": r.element, "note": r.note, "branch": r.branch, "pr": r.pr,
+            "body": r.body, "path": str(r.path)}
 
 
 def cmd_request(args):
@@ -366,8 +367,15 @@ def cmd_request(args):
 
 def cmd_requests(args):
     if args.close:
-        r = requests.close(args.close, requests.DISMISSED if args.dismiss else requests.DONE,
-                           args.note or "")
+        r = (requests.decline(args.close, args.note or "") if args.decline else
+             requests.deliver(args.close, args.note or "", args.branch or "", args.pr or ""))
+    elif args.accept:
+        r = requests.accept(args.accept)
+    elif args.reject:
+        r = requests.reject(args.reject, args.note or "")
+    else:
+        r = None
+    if r:
         out(args, request_dict(r), f"{r.id}: {r.status}")
         return
     found = requests.all_requests(args.to, args.all)
@@ -606,12 +614,19 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("-k", "--kind", default="feature", choices=requests.KINDS)
     p.add_argument("-d", "--detail", help="what is missing, why, and what would do (Markdown)")
     p.add_argument("-e", "--element", help="element it is for")
-    p = add("requests", cmd_requests, "requests to your tools; --close one when it is done")
+    p = add("requests", cmd_requests,
+            "requests to your tools; a dev session hands one back with --close")
     p.add_argument("--to", help="only requests to this tool")
-    p.add_argument("--all", action="store_true", help="include done and dismissed")
-    p.add_argument("--close", metavar="ID", help="mark a request done (from its dev session)")
-    p.add_argument("--dismiss", action="store_true", help="with --close: declined, not done")
-    p.add_argument("-n", "--note", help="with --close: what changed and how to use it")
+    p.add_argument("--all", action="store_true", help="include accepted, rejected, declined")
+    p.add_argument("--close", metavar="ID",
+                   help="dev session: the change is delivered, for the user to review")
+    p.add_argument("--branch", help="with --close: the branch the change is on")
+    p.add_argument("--pr", help="with --close: its pull request URL")
+    p.add_argument("--decline", action="store_true",
+                   help="with --close: it does not belong in this tool (say why in -n)")
+    p.add_argument("--accept", metavar="ID", help="merge a delivered change (the user's call)")
+    p.add_argument("--reject", metavar="ID", help="turn a request down (the user's call)")
+    p.add_argument("-n", "--note", help="what changed and how to use it; or why not")
     add("review", cmd_review, "pending changes and the agent's proposal")
     p = add("approve", cmd_approve, "commit pending changes (all, an element's, or paths)")
     p.add_argument("paths", nargs="*")

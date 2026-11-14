@@ -197,7 +197,10 @@ SETTINGS = """{
       "Bash(factory lock *)",
       "Bash(factory decide *)",
       "Bash(factory approve *)",
-      "Bash(factory reject *)"
+      "Bash(factory reject *)",
+      "Bash(factory requests --accept *)",
+      "Bash(factory requests --reject *)",
+      "Bash(gh pr merge *)"
     ]
   }
 }
@@ -212,7 +215,7 @@ each gate still needs.
 
 - Work in the files. The user reviews and approves every change in Factory's Review tab.
 - Never commit, push, reset, checkout, restore, tag or rebase, and never run `factory lock`,
-  `decide`, `approve` or `reject`: those are the user's.
+  `decide`, `approve`, `reject` or `requests --accept/--reject`: those are the user's.
 - A trade-off that is the user's to make becomes a question (`factory ask`), not a guess.
 - Use the user's tools (Citadel for literature, Materia for materials, Factory's modules
   and tasks for simulation). When one falls short, don't hack around it: file

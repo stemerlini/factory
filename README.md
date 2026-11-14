@@ -134,11 +134,27 @@ factory requests                      # what is waiting, from every project
 
 Requests from every project collect in `~/.local/share/factory/requests`, one Markdown file
 each. A request can go to Factory or to any git repository beside it (`~/Projects/materia`…),
-or to one named under `[tools]` in the config. Home lists the project's unsent requests;
-`R` lists them all, and `enter` opens a development session (your agent, in the tool's
-repository, briefed with the request), which first proposes how to do it. When the change
-is in, that session runs `factory requests --close ID -n "<what changed>"`; Home and the
-journal then tell you, and you tell the project's agent to pick it up.
+or to one named under `[tools]` in the config. Home lists what needs you; `R` lists every
+request:
+
+| Key | |
+|---|---|
+| `enter` | hand the request to a development session: your agent, in the tool's repository, briefed with it |
+| `y` | accept the delivered change: merge its pull request (or branch) and update the checkout |
+| `x` | reject it, with a reason: its pull request is closed |
+| `d` | open its pull request |
+
+When Herdr runs, the session opens as a tab in the tool's Herdr
+workspace (`factory-dev`, `citadel-dev`…, created if missing), where you watch it, steer it
+and answer its prompts. Otherwise it gets a terminal window. The session works by the
+repository's `AGENTS.md` (Factory, Citadel and Materia each have one: a branch, a failing
+test first, green checks, docs, a pull request), or by the same loop when a repository has
+none. It proposes before it builds, never merges, and hands back with
+`factory requests --close ID --branch B --pr URL -n "<what changed>"`, or declines a request
+that does not belong in its tool.
+
+Once you accept or reject (or the tool declines), Home says so: `enter` tells the project's
+agent, to pick the change up, or to find another way.
 
 ### Reviewing the agent's work
 
