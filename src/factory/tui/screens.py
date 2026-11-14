@@ -407,7 +407,7 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 | `L` | lock the element (needs a commit and proven analysis) |
 | `c` | cancel the selected run |
 | `m` | tools: what the project uses, what is installed; `e` enables a module |
-| `R` | requests to your tools: `enter` dev session (Herdr), `y` accept, `x` reject |
+| `R` | requests to your tools: `enter` dev session (Herdr), `a` accept, `x` reject, `h` history |
 | `ctrl+p` | command palette: every action by name |
 | `a` | agent: start (or show) this element's agent in the pane, briefed on it |
 | `ctrl+a` | show, focus or hide the agent pane; `esc` in it stops the agent |
@@ -507,10 +507,10 @@ class RequestsScreen(ModalScreen[bool]):
     you accept (merge) or reject here. Either way the project's agent hears of it."""
 
     BINDINGS = [Binding("escape,q,R", "close", "Close"),
-                Binding("y", "accept", "Accept (merge)"),
+                Binding("a,y", "accept", "Accept (merge)"),
                 Binding("x", "reject", "Reject"),
                 Binding("d", "diff", "Pull request"),
-                Binding("a", "toggle_all", "Show ended")]
+                Binding("h", "toggle_all", "History")]
     MARKS = {requests.OPEN: ("⇢", "cyan"), requests.SENT: ("…", "yellow"),
              requests.DELIVERED: ("●", "bold cyan"), requests.ACCEPTED: ("✓", "green"),
              requests.REJECTED: ("✗", "red"), requests.DECLINED: ("✗", "dim")}
@@ -527,8 +527,8 @@ class RequestsScreen(ModalScreen[bool]):
             yield Label("Requests to your tools", classes="dialog-title")
             yield Static("Features, fixes and materials your project agents found missing.  "
                          "enter: hand it to a dev session in the tool's repo (Herdr) · "
-                         "y accept the delivered change (merge) · x reject · d its pull "
-                         "request · a show ended ones", classes="hint")
+                         "a accept the delivered change (merge) · x reject · d its pull "
+                         "request · h history: accepted and rejected ones", classes="hint")
             yield DataTable(id="request-table", cursor_type="row")
             yield Static(id="request-body", classes="detail")
 
@@ -609,7 +609,8 @@ class RequestsScreen(ModalScreen[bool]):
         if not r or r.status != requests.DELIVERED:
             self.notify("Only a delivered change can be accepted", severity="warning")
             return
-        self.act(lambda: f"Merged {requests.accept(r.id).id}; tell the agent from Home")
+        self.act(lambda: f"Merged {requests.accept(r.id).id} and archived it; tell the agent "
+                         "from Home")
 
     def action_reject(self) -> None:
         r = self.current()
@@ -636,6 +637,8 @@ class RequestsScreen(ModalScreen[bool]):
     def action_toggle_all(self) -> None:
         self.everything = not self.everything
         self.fill()
+        self.notify("Showing ended requests too" if self.everything
+                    else "Ended requests hidden (h shows them)")
 
     def action_close(self) -> None:
         self.dismiss(self.changed)

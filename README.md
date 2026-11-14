@@ -140,9 +140,10 @@ request:
 | Key | |
 |---|---|
 | `enter` | hand the request to a development session: your agent, in the tool's repository, briefed with it |
-| `y` | accept the delivered change: merge its pull request (or branch) and update the checkout |
+| `a` | accept the delivered change: merge its pull request (or branch) and update the checkout |
 | `x` | reject it, with a reason: its pull request is closed |
 | `d` | open its pull request |
+| `h` | history: show accepted, rejected and declined requests too (hidden otherwise) |
 
 When Herdr runs, the session opens as a tab in the tool's Herdr
 workspace (`factory-dev`, `citadel-dev`…, created if missing), where you watch it, steer it
