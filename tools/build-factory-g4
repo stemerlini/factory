@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Build Factory's generic Geant4 application (src/factory/modules/g4app) and install it as
+# factory-g4 into the Geant4 toolchain's bin/, so `geant4.run` finds it on PATH.
+#   tools/build-factory-g4 [version]      (default: 11.4.3; run after tools/build-geant4)
+set -euo pipefail
+
+version="${1:-11.4.3}"
+prefix="$HOME/.local/opt/geant4/$version"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+src="$here/src/factory/modules/g4app"
+build="$HOME/.local/src/factory-g4-build-$version"
+
+[[ -f "$prefix/bin/geant4.sh" ]] || { echo "Geant4 $version not installed: run tools/build-geant4 $version" >&2; exit 1; }
+source "$prefix/bin/geant4.sh"
+cmake -S "$src" -B "$build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$prefix" \
+  -DGeant4_DIR="$prefix/lib/cmake/Geant4"
+cmake --build "$build" -j "$(nproc)"
+cmake --install "$build"
+echo "Installed $prefix/bin/factory-g4"

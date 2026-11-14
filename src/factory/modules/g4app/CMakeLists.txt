@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.16)
+project(factory_g4 CXX)
+find_package(Geant4 REQUIRED gdml)
+add_executable(factory-g4 main.cc)
+target_link_libraries(factory-g4 ${Geant4_LIBRARIES})
+install(TARGETS factory-g4 RUNTIME DESTINATION bin)

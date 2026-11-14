@@ -1,14 +1,17 @@
 """Geant4: Monte Carlo transport of particles through matter.
 
-Phase 0 runs any Geant4 application with a macro. Phase 2 adds ``factory-g4``, one generic
-application (GDML geometry, GPS source, per-volume energy deposits to HDF5), so studies
-need no C++.
+``geant4.run`` runs any Geant4 application with a macro. With the default ``factory-g4``
+(``src/factory/modules/g4app``, built by ``tools/build-factory-g4``) a study needs no C++: the
+geometry is a GDML file or a layer stack (``stack.yaml``, see ``stack.py``) given as the
+``stack`` input, the source is a GPS macro, and ``events.csv`` holds one row per event with the
+energy deposited in each named volume plus ``back`` and ``escape`` flags of the primary.
 """
 
 from __future__ import annotations
 
 import os
 
+from . import stack as stacks
 from .api import Check, Command, FileKind, Module, Param, RunContext, Task, Tool, Toolchain
 
 TOOLCHAIN = Toolchain("geant4", env_script="bin/geant4.sh", executable="bin/geant4-config")
@@ -17,7 +20,20 @@ TOOLCHAIN = Toolchain("geant4", env_script="bin/geant4.sh", executable="bin/gean
 def run_command(ctx: RunContext) -> Command:
     app = ctx.params["app"]
     macro = ctx.study.dir / ctx.params["macro"]
-    argv = [app, str(macro)]
+    argv = [app]
+    geometry = ctx.inputs.get("stack") or ctx.inputs.get("geometry")
+    if geometry is not None:
+        gdml, names = geometry, []
+        if geometry.suffix.lower() != ".gdml":
+            spec = stacks.load(geometry)
+            gdml, names = ctx.outputs_dir / "geometry.gdml", stacks.sensitive(spec)
+            ctx.outputs_dir.mkdir(parents=True, exist_ok=True)
+            gdml.write_text(stacks.to_gdml(spec))
+        names = [n.strip() for n in str(ctx.params["sensitive"]).split(",") if n.strip()] or names
+        argv += ["--gdml", str(gdml), "--physics", ctx.params["physics"]]
+        if names:
+            argv += ["--sensitive", ",".join(names)]
+    argv.append(str(macro))
     if ctx.params.get("threads"):
         argv += ["-t", str(ctx.params["threads"])]
     return Command(argv, env={"FACTORY_OUTPUTS": str(ctx.outputs_dir)}, cwd=ctx.outputs_dir)
@@ -56,7 +72,11 @@ module = Module(
                 Param("app", str, "factory-g4", help="Geant4 executable"),
                 Param("macro", str, "run.mac", help="macro, relative to the study folder"),
                 Param("threads", int, None, help="worker threads"),
+                Param("physics", str, "FTFP_BERT_EMZ", help="reference physics list (factory-g4)"),
+                Param("sensitive", str, "", help="volumes to record, comma-separated "
+                      "(default: the stack's layers, or every volume in the world of a GDML)"),
             ),
+            outputs=("events.csv",),
         )
     ],
     tools=[

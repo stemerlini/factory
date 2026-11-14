@@ -30,7 +30,7 @@ where = ["src"]
 version = {attr = "factory.__version__"}
 
 [tool.setuptools.package-data]
-factory = ["tui/*.tcss", "templates/**/*", "playbooks/*.md"]
+factory = ["tui/*.tcss", "templates/**/*", "playbooks/*.md", "modules/g4app/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
