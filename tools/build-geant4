@@ -55,3 +55,4 @@ for l in G4EmStandardPhysics_option4 G4EmLivermorePhysics; do
   grep -rqs "$l" "$prefix/include" || { echo "Physics list $l missing" >&2; exit 1; }
 done
 echo "Installed Geant4 $version at $prefix; 'factory modules' checks it."
+"$(dirname "${BASH_SOURCE[0]}")/build-factory-g4" "$version"

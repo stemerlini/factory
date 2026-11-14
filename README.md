@@ -204,6 +204,17 @@ are part of the build. The wrapper `bin/geant4.sh` exports the `G4*DATA` variabl
 `factory modules` checks the datasets and `geant4.run` runs an application with a macro (for
 example the GPS macros `irene.environment` writes).
 
+`tools/build-factory-g4 [version]` (also run by `build-geant4`) installs `factory-g4`, a generic
+application, so a study needs no C++. Give `geant4.run` a geometry as the `stack` input
+(`[inputs] stack = "geometry/stack.yaml"`, or a `.gdml` file) and a GPS macro (`macro`, e.g. an
+isotropic or cos-law source, or the IRENE `gps_*.mac`). A stack lists `layers` front to back
+(`name`, `material`, `thickness_nm|um|mm`, `radius_mm` or `half_mm`, optional `gap_mm`), optional
+`materials` (`{density_g_cm3, formula}`) and `volumes` (tubes for housings and collimators);
+the front face is at z = 0. Parameters: `physics` (any Geant4 reference list, default
+FTFP_BERT_EMZ), `sensitive` (volumes to record; default the layers, or everything in a GDML
+world), `threads`. `events.csv` has one row per event: `species, E_MeV, <volume>_keV…, back,
+escape` (the primary last left the stack towards -z, or towards +z/sideways).
+
 ## Writing a module
 
 A module is a `factory.modules.api.Module` with tasks, tools, viewers, element kinds, file

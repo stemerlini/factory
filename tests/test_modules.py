@@ -83,3 +83,49 @@ def test_suite_lists_the_projects_tools_first(make):
     assert not rows["pic"][0]
     flags = [uses for _, uses, _ in registry.suite(p)]
     assert flags == sorted(flags, reverse=True)
+
+
+STACK = {
+    "layers": [
+        {"name": "Kap", "material": "G4_KAPTON", "thickness_um": 50, "half_mm": 10},
+        {"name": "D1", "material": "G4_Si", "thickness_um": 300, "radius_mm": 5, "gap_mm": 1},
+    ],
+    "volumes": [{"name": "Coll", "material": "G4_W", "rmin_mm": 6, "rmax_mm": 15,
+                 "z_mm": 0, "length_mm": 5}],
+}
+
+
+def test_stack_becomes_gdml_with_the_front_face_at_zero():
+    import xml.etree.ElementTree as ET
+
+    from factory.modules import stack
+
+    root = ET.fromstring(stack.to_gdml(STACK))
+    z = {pv.get("name"): float(pv.find("position").get("z")) for pv in root.iter("physvol")}
+    assert z["Kap_pv"] == pytest.approx(0.025)  # 50 um centred behind z = 0
+    assert z["D1_pv"] == pytest.approx(0.05 + 1 + 0.15)
+    assert stack.sensitive(STACK) == ["Kap", "D1"]
+    with pytest.raises(stack.StackError, match="radius_mm"):
+        stack.to_gdml({"layers": [{"name": "X", "material": "G4_Si", "thickness_um": 1}]})
+
+
+def test_geant4_run_command_from_a_stack(make):
+    import yaml
+
+    from factory.modules.api import RunContext
+    from factory.modules.geant4 import run_command
+
+    p = make()
+    stack_file = p.root / "stack.yaml"
+    stack_file.write_text(yaml.safe_dump(STACK))
+    study = p.study("S001")
+    outputs = p.root / "out"
+    ctx = RunContext(p, study, "r1", outputs.parent, {
+        "app": "factory-g4", "macro": "m.mac", "physics": "QBBC", "sensitive": "", "threads": 4,
+    }, {"stack": stack_file})
+    argv = run_command(ctx).argv
+    gdml = ctx.outputs_dir / "geometry.gdml"
+    assert gdml.is_file()
+    assert argv[:7] == ["factory-g4", "--gdml", str(gdml), "--physics", "QBBC",
+                        "--sensitive", "Kap,D1"]
+    assert argv[-3:] == [str(study.dir / "m.mac"), "-t", "4"]

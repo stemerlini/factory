@@ -396,6 +396,11 @@ The particle-telescope and plasma-thruster trees live on as test fixtures.
    - 2026-11-14: Geant4 is installed by `tools/build-geant4` (source build, same toolchain
      layout as IRENE), requested by a project whose analytic CSDA model needs scattering and
      bremsstrahlung. The generic `factory-g4` application remains Phase 2.
+   - 2026-11-15: `factory-g4` (`modules/g4app`, `tools/build-factory-g4`), requested by the
+     Relativistic Particle Tracker: GDML or a `stack.yaml` (converted to GDML by `stack.py`),
+     GPS macro source, physics-list parameter, per-volume deposits plus `back`/`escape` flags
+     in `events.csv`. Per-event CSV rather than HDF5 for now (no extra dependency); the
+     viewer tool still needs a Qt-enabled Geant4.
 5. **Baselines** — lock/unlock, tags, frozen reports, change impact on children.
 6. **Electronics** — ngspice studies (metrics from `.meas`), KiCad ERC/DRC, BOM + Gerbers.
 7. **Mechanics** — FreeCAD/build123d, STEP export, FEA (CalculiX/Elmer), drawings.

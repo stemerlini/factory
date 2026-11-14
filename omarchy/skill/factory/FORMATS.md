@@ -130,3 +130,32 @@ metrics.write("mass", 107.0, "g")                     # what criteria check
 ```
 
 Print the working (inputs, intermediate values, result) so the run log explains the number.
+
+## A Geant4 study (`factory-g4`)
+
+```toml
+task = "geant4.run"
+[params]
+macro = "run.mac"            # GPS source (e.g. isotropic, /gps/ang/type cos) and /run/beamOn
+physics = "FTFP_BERT_EMZ"    # any Geant4 reference physics list
+threads = 8
+# sensitive = "D1,D2"        # volumes to record; default: the stack's layers
+[inputs]
+stack = "geometry/stack.yaml"   # or a .gdml file
+```
+
+```yaml
+world_margin_mm: 50                       # vacuum around the stack
+materials:                                # G4_* NIST names need no entry
+  GAGG: {density_g_cm3: 6.63, formula: {Gd: 3, Al: 2, Ga: 3, O: 12}}
+layers:                                   # front to back along +z, front face at z = 0
+  - {name: Kapton, material: G4_KAPTON, thickness_um: 50, half_mm: 10}   # square
+  - {name: D1, material: G4_Si, thickness_um: 300, radius_mm: 5}         # disc
+  - {name: D2, material: G4_Si, thickness_um: 300, radius_mm: 5, gap_mm: 1}
+volumes:                                  # housing, collimators: tubes at absolute z
+  - {name: Collimator, material: G4_W, rmin_mm: 5, rmax_mm: 15, z_mm: -10, length_mm: 8}
+```
+
+Output `events.csv`: `species,E_MeV,<volume>_keV…,back,escape`, one row per primary. `back` = the
+primary last left the stack towards -z; `escape` = towards +z or sideways; both 0 = stopped
+inside. Volumes must not overlap. Place the GPS source in the macro in the same frame.
