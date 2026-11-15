@@ -122,7 +122,7 @@ factory request "IRENE task: AP9 percentile as a parameter" --to factory -k feat
   Proposed: a percentile parameter on the task."
 ```
 
-Kinds: `feature`, `bug`, `material`, `data`, `update`. Say what is missing, why this project
+Kinds: `feature`, `bug`, `material`, `data`, `update`, `design`. Say what is missing, why this project
 needs it, and what would do. Then name the request in the proposal and carry on with what it
 does not block (a clearly labelled first-order estimate is fine), or stop and say so. The
 user sends requests to a development session of the tool, then accepts or rejects what it
@@ -134,7 +134,12 @@ find another way. Accepting and rejecting are the user's; never run
 AGENTS.md, propose before you build, deliver on a branch with a pull request, never merge,
 and hand back with `factory requests --close ID --branch B --pr URL -n "<what changed and how
 the project uses it>"`, or `--close ID --decline -n "<why>"` if it does not belong there.
-A `material` or `data` request is not a code change: add it locally to the tool's library
+A `design` request is a job: `factory request "Collimator, 3 apertures" --to brick -k design
+-d "<parameters and ranges, the part to start from, what it is for>"` has Brick's session make
+one variant per design and hand back pinned references (`item/variant@vN#sha256:<pin>`), which
+go in `stack.yaml` under `cad:` (see FORMATS.md). Look in Brick first (`brick list`, its MCP
+tools): the part may already exist.
+A `material`, `data` or `design` request is not a code change: add it locally to the tool's library
 with its own commands, no branch or pull request, and hand back with `--close ID -n "<what
 was added and where>"`.
 

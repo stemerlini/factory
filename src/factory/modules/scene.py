@@ -27,6 +27,36 @@ def _circle(r: float, z: float, n: int = 48) -> list[tuple[float, float, float]]
             for i in range(n + 1)]
 
 
+def _turn(p: tuple[float, float, float], deg: tuple[float, float, float]):
+    """A point moved as Geant4 does for a GDML ``<rotation>``: the inverse of Rz·Ry·Rx."""
+    x, y, z = p
+    for axis, a in (("z", deg[2]), ("y", deg[1]), ("x", deg[0])):
+        c, s = math.cos(math.radians(-a)), math.sin(math.radians(-a))
+        if axis == "x":
+            y, z = y * c - z * s, y * s + z * c
+        elif axis == "y":
+            x, z = x * c + z * s, -x * s + z * c
+        else:
+            x, y = x * c - y * s, x * s + y * c
+    return x, y, z
+
+
+def cad_outlines(cad: list) -> list[Line]:
+    """The box around each Brick part (its tight world), at its place in the stack."""
+    lines: list[Line] = []
+    for c in cad:
+        hx, hy, hz = c.half
+        corner = {(i, j, k): _turn((i * hx, j * hy, k * hz), c.rotation)
+                  for i in (-1, 1) for j in (-1, 1) for k in (-1, 1)}
+        at = {k: (p[0] + c.position[0], p[1] + c.position[1], p[2] + c.position[2])
+              for k, p in corner.items()}
+        for (i, j, k), a in at.items():
+            for b in ((-i, j, k), (i, -j, k), (i, j, -k)):
+                if (i, j, k) < b:
+                    lines.append(([a, at[b]], OUTLINE))
+    return lines
+
+
 def outlines(stack: dict) -> list[Line]:
     lines: list[Line] = []
     for v in stacks.placements(stack):
@@ -72,8 +102,8 @@ def write_vtk(path: Path, lines: list[Line]) -> None:
     Path(path).write_text("\n".join(out) + "\n")
 
 
-def build(stack: dict | None, tracks: Path | None, path: Path) -> Path:
-    lines = outlines(stack) if stack else []
+def build(stack: dict | None, tracks: Path | None, path: Path, cad: list = ()) -> Path:
+    lines = outlines(stack) + cad_outlines(list(cad)) if stack else []
     if tracks is not None and tracks.is_file():
         lines += read_tracks(tracks)
     write_vtk(path, lines)

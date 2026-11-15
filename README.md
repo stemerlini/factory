@@ -145,6 +145,11 @@ request:
 | `d` | open its pull request |
 | `h` | history: show accepted, rejected and declined requests too (hidden otherwise) |
 
+A `design` request is a job for a tool that makes things: another collimator, a parameter
+sweep of a part. Sent to `brick`, its session makes one variant per design in the parts library
+(no branch or pull request) and hands back every part as a pinned reference, which the project
+puts in a `stack.yaml` `cad:` entry; the project's agent hears the list when you accept.
+
 A `material` or `data` request adds to the tool's library rather than its code: the
 development session adds it locally, with no branch or pull request, and accepting it just
 records that you agree.
@@ -209,11 +214,21 @@ application, so a study needs no C++. Give `geant4.run` a geometry as the `stack
 (`[inputs] stack = "geometry/stack.yaml"`, or a `.gdml` file) and a GPS macro (`macro`, e.g. an
 isotropic or cos-law source, or the IRENE `gps_*.mac`). A stack lists `layers` front to back
 (`name`, `material`, `thickness_nm|um|mm`, `radius_mm` or `half_mm`, optional `gap_mm`), optional
-`materials` (`{density_g_cm3, formula}`) and `volumes` (tubes for housings and collimators);
-the front face is at z = 0. Parameters: `physics` (any Geant4 reference list, default
+`materials` (`{density_g_cm3, formula}`), `volumes` (tubes for housings and collimators) and
+`cad` (parts from [Brick](https://github.com/stemerlini/brick), the 3D parts library; see
+below); the front face is at z = 0. Parameters: `physics` (any Geant4 reference list, default
 FTFP_BERT_EMZ), `sensitive` (volumes to record; default the layers, or everything in a GDML
 world), `threads`. `events.csv` has one row per event: `species, E_MeV, <volume>_keV…, back,
 escape` (the primary last left the stack towards -z, or towards +z/sideways).
+
+A `cad` entry, `{name, ref, position_mm, rotation_deg, sensitive}`, places a Brick part in the
+world: before the run Factory calls `brick export REF -f gdml`, which checks the file against the
+pin in `ref` (`item/variant@vN#sha256:<pin>`, which `brick export` prints; an unpinned ref is
+refused), and merges the part's volumes at `position_mm` (the origin of the part's frame).
+`rotation_deg` is GDML's `<rotation>`: Geant4 turns the frame, so a part turned +30° about z is
+`[0, 0, -30]`. `sensitive: true` records every volume of the part; their names are in
+`brick show REF --json`. The run keeps `cad.json` (refs and pins, so a run says which geometry it
+used) and the 3D view draws each part's box. A part overlapping the stack is not checked.
 
 The tracks of the first `tracks` events (default 20, 0 = none) are drawn with the volume outlines
 in `scene.vtk`; `v` on it opens f3d (or ParaView) coloured by particle: e- 0, gamma 1, e+ 2,

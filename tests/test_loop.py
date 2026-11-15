@@ -210,4 +210,12 @@ def test_request_delivered_accepted_or_rejected(make, tmp_path, capsys):
     assert main(["requests", "--close", r.id, "-n", "added to the library"]) == 0
     assert main(["requests", "--accept", r.id]) == 0
     assert requests.get(r.id).status == requests.ACCEPTED
+
+    # A design job for Brick: variants in the library, handed back as pinned references.
+    job = requests.file("tool", "Collimator, 3 apertures", kind="design", project=p)
+    brief = requests.prompt(job)
+    assert "brick add" in brief and "--pr" not in brief and "pinned reference" in brief
+    assert main(["requests", "--close", job.id, "-n", "plate/w13@v1#sha256:ab"]) == 0
+    assert main(["requests", "--accept", job.id]) == 0
+    assert "plate/w13@v1#sha256:ab" in requests.report(requests.get(job.id))
     capsys.readouterr()

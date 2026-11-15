@@ -29,13 +29,15 @@ import yaml
 from . import config, journal
 from .project import Project, ProjectError, read_frontmatter
 
-KINDS = ("feature", "bug", "material", "data", "update")
+KINDS = ("feature", "bug", "material", "data", "update", "design")
 OPEN, SENT, DELIVERED = "open", "sent", "delivered"
 ACCEPTED, REJECTED, DECLINED = "accepted", "rejected", "declined"
 WAITING = (OPEN, SENT, DELIVERED)
 ENDED = (ACCEPTED, REJECTED, DECLINED)
 # Kinds that add to a tool's data (its library), not its code: done locally, no pull request.
-DATA_KINDS = ("material", "data")
+# A ``design`` is a job for a tool that makes things (Brick: another collimator, a parameter
+# sweep of a part): its result is parts in the library, named by pinned reference.
+DATA_KINDS = ("material", "data", "design")
 FACTORY = Path(__file__).resolve().parents[2]
 
 # How a development session works when its repository has no AGENTS.md of its own: the
@@ -282,6 +284,10 @@ def mark_told(request_id: str) -> None:
 def report(r: Request) -> str:
     """What the project's agent hears when a request has ended."""
     head = f"Your request {r.id} to {r.to} ({r.title})"
+    if r.status == ACCEPTED and r.kind == "design":
+        return (f"{head} was done and the user accepted it. The parts, pinned:\n\n{r.note}\n\n"
+                "Pick them up: reference each one in a `stack.yaml` `cad:` entry (ref with its "
+                "pin), one study or run per variant, and compare the results.")
     if r.status == ACCEPTED:
         return (f"{head} was delivered and the user accepted it: {r.note}\n\nPick it up: "
                 "use the new capability where you had worked around it, rerun the studies "
@@ -305,6 +311,21 @@ def prompt(r: Request, repo: Path | None = None) -> str:
                "it." if r.root else "")
     head = (f"A {r.kind} request{origin}{where}, filed by its agent: {r.title}\n\n"
             f"{r.body or '(no detail given)'}\n\nThe request is {r.path}.{project}\n\n")
+    if r.kind == "design":
+        return head + (
+            "This is a design job: make the parts in the tool's own library, with the tool's "
+            "commands (Brick: `brick new`, `brick add ITEM/VARIANT part.py -p k=v -m \"why\"`, "
+            "`brick derive`; read `brick --help` and its skill). One variant of the same item "
+            "per design or parameter set, named for what differs (`aperture-w13`), never a "
+            "new unrelated item; keep each parameter set in the variant's purpose. Check each "
+            "part builds, `brick verify` passes, and the GDML loads. No branch, no commit, "
+            "no pull request. First say what you will make and with which parameters, and "
+            "wait for my go-ahead. When it is done, run\n"
+            f"`factory requests --close {r.id} -n \"<every part as its pinned reference, "
+            "item/variant@vN#sha256:<pin>, with its parameters, one per line>\"`.\n"
+            "If it needs code after all (a feature Brick lacks), say so and wait. If it does "
+            f"not belong in this tool, run `factory requests --close {r.id} --decline -n "
+            "\"<why, and what the project could do instead>\"`.")
     if r.kind in DATA_KINDS:
         return head + (
             "This asks for data, not code: add it locally to the tool's own library or data "

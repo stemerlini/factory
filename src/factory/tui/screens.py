@@ -407,7 +407,7 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 | `L` | lock the element (needs a commit and proven analysis) |
 | `c` | cancel the selected run |
 | `m` | tools: what the project uses, what is installed; `e` enables a module |
-| `R` | requests to your tools: `enter` dev session (Herdr), `a` accept, `x` reject, `h` history |
+| `R` | requests to your tools: `enter` dev session, `a` accept, `x` reject, `h` history |
 | `ctrl+p` | command palette: every action by name |
 | `a` | agent: start (or show) this element's agent in the pane, briefed on it |
 | `ctrl+a` | show, focus or hide the agent pane; `esc` in it stops the agent |
@@ -525,7 +525,7 @@ class RequestsScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog modules"):
             yield Label("Requests to your tools", classes="dialog-title")
-            yield Static("Features, fixes and materials your project agents found missing.  "
+            yield Static("Features, fixes, materials, design jobs your agents asked for.  "
                          "enter: hand it to a dev session in the tool's repo (Herdr) · "
                          "a accept the delivered change (merge) · x reject · d its pull "
                          "request · h history: accepted and rejected ones", classes="hint")
