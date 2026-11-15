@@ -407,7 +407,7 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 | `L` | lock the element (needs a commit and proven analysis) |
 | `c` | cancel the selected run |
 | `m` | tools: what the project uses, what is installed; `e` enables a module |
-| `R` | requests to your tools (incl. design jobs for Brick): `enter` dev session (Herdr), `a` accept, `x` reject, `h` history |
+| `R` | requests to your tools: `enter` dev session, `a` accept, `x` reject, `h` history |
 | `ctrl+p` | command palette: every action by name |
 | `a` | agent: start (or show) this element's agent in the pane, briefed on it |
 | `ctrl+a` | show, focus or hide the agent pane; `esc` in it stops the agent |
