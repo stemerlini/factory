@@ -405,6 +405,14 @@ The particle-telescope and plasma-thruster trees live on as test fixtures.
      `scene.vtk` (legacy VTK polylines: wireframe outlines, so tracks inside solids stay
      visible) opened by f3d/ParaView through the existing viewers. No live animation: runs are
      batch and fast.
+   - 2026-11-15: Brick (`~/Projects/brick`, parts library, `brick export`) is the home of 3D
+     parts; Factory does not model CAD. `stack.yaml` gains `cad:` (a pinned ref, a position and
+     rotation): `stack.fetch` exports GDML through the `brick` CLI, refuses an unpinned ref or a
+     pin mismatch, and `to_gdml` merges the part's volumes into the world (its own world box is
+     dropped); the run keeps `cad.json`. This replaces the request for rectangular box volumes
+     (factory-3): a rectangular aperture is a Brick part. A new request kind `design` is a job
+     for a tool that makes things (another collimator, a parameter sweep): like `data` it
+     needs no branch or pull request, and what comes back is a list of pinned refs.
 5. **Baselines** — lock/unlock, tags, frozen reports, change impact on children.
 6. **Electronics** — ngspice studies (metrics from `.meas`), KiCad ERC/DRC, BOM + Gerbers.
 7. **Mechanics** — FreeCAD/build123d, STEP export, FEA (CalculiX/Elmer), drawings.

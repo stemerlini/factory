@@ -219,7 +219,9 @@ each gate still needs.
 - A trade-off that is the user's to make becomes a question (`factory ask`), not a guess.
 - Use the user's tools (Citadel for literature, Materia for materials, Factory's modules
   and tasks for simulation). When one falls short, don't hack around it: file
-  `factory request "<what>" --to <tool>` and say so in the proposal.
+  `factory request "<what>" --to <tool>` and say so in the proposal. Brick holds 3D parts
+  (STEP, GDML): use a part by its pinned ref in `stack.yaml` `cad:`; for a new design or a
+  parameter sweep, `factory request "<what>" --to brick -k design`.
 - Before you stop, write what you did and what comes next in `.factory/proposal.md`.
 - A message starting "Review of your proposal" is the user's review: committed files are
   done; revise the ones with comments, then update the proposal and stop again.

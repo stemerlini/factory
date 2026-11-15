@@ -154,7 +154,15 @@ layers:                                   # front to back along +z, front face a
   - {name: D2, material: G4_Si, thickness_um: 300, radius_mm: 5, gap_mm: 1}
 volumes:                                  # housing, collimators: tubes at absolute z
   - {name: Collimator, material: G4_W, rmin_mm: 5, rmax_mm: 15, z_mm: -10, length_mm: 8}
+cad:                                      # parts from Brick, pinned; merged into the world
+  - {name: Housing, ref: "repe-housing/geant4@v1#sha256:<pin>", position_mm: [0, 0, 20],
+     rotation_deg: [0, 0, 0], sensitive: false}   # rotation as GDML <rotation>: frame turned
 ```
+
+A `cad` part is exported as GDML by `brick export` (hash-checked; an unpinned ref is refused)
+and its volumes placed with the origin of its frame at `position_mm`. Volume names are in
+`brick show REF --json` (`selected.volumes`): use them in `sensitive`, or set `sensitive: true`.
+The run writes `cad.json` (refs and pins).
 
 Output `events.csv`: `species,E_MeV,<volume>_keV…,back,escape`, one row per primary. `back` = the
 primary last left the stack towards -z; `escape` = towards +z or sideways; both 0 = stopped

@@ -29,9 +29,12 @@ def run_command(ctx: RunContext) -> Command:
         gdml, names = geometry, []
         if geometry.suffix.lower() != ".gdml":
             spec = stacks.load(geometry)
-            gdml, names = ctx.outputs_dir / "geometry.gdml", stacks.sensitive(spec)
             ctx.outputs_dir.mkdir(parents=True, exist_ok=True)
-            gdml.write_text(stacks.to_gdml(spec))
+            cad = stacks.fetch(spec, ctx.run_dir / "inputs")
+            gdml, names = ctx.outputs_dir / "geometry.gdml", stacks.sensitive(spec, cad)
+            gdml.write_text(stacks.to_gdml(spec, cad))
+            if cad:
+                stacks.save_cad(cad, ctx.outputs_dir / "cad.json")
         names = [n.strip() for n in str(ctx.params["sensitive"]).split(",") if n.strip()] or names
         argv += ["--gdml", str(gdml), "--physics", ctx.params["physics"]]
         if ctx.params["tracks"]:
@@ -55,7 +58,8 @@ def collect(ctx: RunContext) -> dict:
     """No metrics; builds ``scene.vtk`` (outlines and the recorded tracks) for the 3D viewer."""
     tracks = ctx.outputs_dir / "tracks.csv"
     if tracks.is_file():
-        scene.build(_stack_input(ctx), tracks, ctx.outputs_dir / "scene.vtk")
+        scene.build(_stack_input(ctx), tracks, ctx.outputs_dir / "scene.vtk",
+                    stacks.read_cad(ctx.outputs_dir / "cad.json"))
     return {}
 
 

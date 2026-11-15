@@ -109,6 +109,63 @@ def test_stack_becomes_gdml_with_the_front_face_at_zero():
         stack.to_gdml({"layers": [{"name": "X", "material": "G4_Si", "thickness_um": 1}]})
 
 
+PART_GDML = """<?xml version="1.0"?>
+<gdml><define><position name="plate_v0" unit="mm" x="0" y="0" z="0"/></define>
+<materials/><solids>
+<tessellated name="plate_solid"><triangular vertex1="plate_v0" vertex2="plate_v0"
+ vertex3="plate_v0"/></tessellated>
+<box name="plate_world_solid" lunit="mm" x="20" y="20" z="10"/></solids>
+<structure><volume name="plate"><materialref ref="G4_Al"/><solidref ref="plate_solid"/></volume>
+<volume name="plate_world"><materialref ref="G4_Galactic"/><solidref ref="plate_world_solid"/>
+<physvol name="plate_pv"><volumeref ref="plate"/></physvol></volume></structure>
+<setup name="Default" version="1.0"><world ref="plate_world"/></setup></gdml>"""
+CAD_STACK = {"layers": [{"name": "D1", "material": "G4_Si", "thickness_um": 300, "radius_mm": 5}],
+             "cad": [{"name": "Plate", "ref": "plate/sim@v2#sha256:abc", "sensitive": True,
+                      "position_mm": [1, 2, -20], "rotation_deg": [0, 0, 90]}]}
+
+
+def fake_brick(tmp_path, pin="abc"):
+    def export(ref, dest):
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / "plate.gdml").write_text(PART_GDML)
+        return {"ref": ref.split("#")[0] + f"#sha256:{pin}", "path": str(dest / "plate.gdml"),
+                "pin": pin, "behind": None, "access": "open", "licence": "CC0"}
+    return export
+
+
+def test_cad_part_from_brick_is_merged_into_the_world(tmp_path):
+    import xml.etree.ElementTree as ET
+
+    from factory.modules import stack
+
+    cad = stack.fetch(CAD_STACK, tmp_path / "inputs", export=fake_brick(tmp_path))
+    root = ET.fromstring(stack.to_gdml(CAD_STACK, cad))
+    world = next(v for v in root.iter("volume") if v.get("name") == "World")
+    pv = next(p for p in world.iter("physvol") if p.get("name") == "plate_pv")
+    assert pv.find("position").attrib["z"] == "-20"
+    assert pv.find("rotation").attrib["z"] == "90"
+    assert [v.get("name") for v in root.iter("volume")].count("plate_world") == 0
+    assert stack.sensitive(CAD_STACK, cad) == ["D1", "plate"]
+    assert cad[0].pin == "abc" and cad[0].ref.endswith("#sha256:abc")
+
+    from factory.modules import scene
+
+    box = scene.cad_outlines(cad)  # 20 x 20 x 10 box turned by Geant4's convention, then moved
+    xs = {round(p[0], 6) for pts, _ in box for p in pts}
+    assert len(box) == 12 and xs == {-9.0, 11.0}
+    assert scene._turn((1, 0, 0), (0, 0, 90)) == pytest.approx((0, -1, 0))
+
+
+def test_cad_part_must_be_pinned_and_match_its_pin(tmp_path):
+    from factory.modules import stack
+
+    unpinned = {**CAD_STACK, "cad": [{"name": "P", "ref": "plate/sim@latest"}]}
+    with pytest.raises(stack.StackError, match="pin"):
+        stack.fetch(unpinned, tmp_path, export=fake_brick(tmp_path))
+    with pytest.raises(stack.StackError, match="pin"):
+        stack.fetch(CAD_STACK, tmp_path, export=fake_brick(tmp_path, pin="other"))
+
+
 def test_geant4_run_command_from_a_stack(make):
     import yaml
 
