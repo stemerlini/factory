@@ -15,6 +15,10 @@ from . import stack as stacks
 
 KINDS = {"e-": 0, "gamma": 1, "e+": 2, "proton": 3}
 OTHER, OUTLINE = 4, 6
+# Colormap stops (value/6, r, g, b): e- blue, gamma yellow, e+ red, proton green, other violet,
+# outlines grey.
+_COLORMAP = ("0,0.2,0.6,1,0.1667,1,0.9,0.2,0.3333,1,0.3,0.3,0.5,0.4,1,0.4,"
+             "0.6667,0.8,0.5,1,1,0.5,0.5,0.5")
 Line = tuple[list[tuple[float, float, float]], int]
 
 
@@ -74,3 +78,8 @@ def build(stack: dict | None, tracks: Path | None, path: Path) -> Path:
         lines += read_tracks(tracks)
     write_vtk(path, lines)
     return path
+
+
+def f3d_argv(path: Path) -> list[str]:
+    return ["f3d", "--scalar-coloring", "--coloring-array=kind", "--coloring-by-cells",
+            "--coloring-range=0,6", f"--colormap={_COLORMAP}", "--line-width=3", str(path)]

@@ -63,7 +63,7 @@ def preview(stack_file: Path) -> list[str]:
     """Open a stack in f3d: its volume outlines, front face at z = 0."""
     out = Path(tempfile.gettempdir()) / f"factory-{stack_file.stem}.vtk"
     scene.build(stacks.load(stack_file), None, out)
-    return ["f3d", "--scalar=kind", "--cells", "--line-width=2", str(out)]
+    return scene.f3d_argv(out)
 
 
 def checks() -> list[Check]:
