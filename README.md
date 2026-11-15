@@ -215,6 +215,10 @@ FTFP_BERT_EMZ), `sensitive` (volumes to record; default the layers, or everythin
 world), `threads`. `events.csv` has one row per event: `species, E_MeV, <volume>_keV…, back,
 escape` (the primary last left the stack towards -z, or towards +z/sideways).
 
+The tracks of the first `tracks` events (default 20, 0 = none) are drawn with the volume outlines
+in `scene.vtk`; `v` on it opens f3d (or ParaView) coloured by particle: e- 0, gamma 1, e+ 2,
+proton 3, other 4, outlines 6. `o` on a `stack.yaml` shows the stack alone. Needs `f3d`.
+
 ## Writing a module
 
 A module is a `factory.modules.api.Module` with tasks, tools, viewers, element kinds, file
