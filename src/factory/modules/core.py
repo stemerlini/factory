@@ -32,6 +32,8 @@ module = Module(
     ],
     viewers=[
         Viewer("image", "Inline image", INLINE_IMAGES),
+        Viewer("g4-scene", "Geant4 scene", ("scene.vtk",),
+               lambda f: ["f3d", "--scalar=kind", "--cells", "--line-width=2", str(f)], "f3d"),
         Viewer("f3d", "f3d", MESH_CAD, lambda f: ["f3d", str(f)], "f3d"),
         Viewer("paraview", "ParaView", VTK, lambda f: ["paraview", str(f)], "paraview"),
         Viewer("f3d-vtk", "f3d", VTK, lambda f: ["f3d", str(f)], "f3d"),

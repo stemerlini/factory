@@ -122,10 +122,31 @@ def test_geant4_run_command_from_a_stack(make):
     outputs = p.root / "out"
     ctx = RunContext(p, study, "r1", outputs.parent, {
         "app": "factory-g4", "macro": "m.mac", "physics": "QBBC", "sensitive": "", "threads": 4,
+        "tracks": 5,
     }, {"stack": stack_file})
     argv = run_command(ctx).argv
     gdml = ctx.outputs_dir / "geometry.gdml"
     assert gdml.is_file()
-    assert argv[:7] == ["factory-g4", "--gdml", str(gdml), "--physics", "QBBC",
-                        "--sensitive", "Kap,D1"]
+    assert argv[:9] == ["factory-g4", "--gdml", str(gdml), "--physics", "QBBC",
+                        "--tracks", "5", "--sensitive", "Kap,D1"]
     assert argv[-3:] == [str(study.dir / "m.mac"), "-t", "4"]
+
+
+def test_scene_is_valid_vtk_with_outlines_and_tracks(tmp_path):
+    from factory.modules import scene
+
+    tracks = tmp_path / "tracks.csv"
+    tracks.write_text("event,track,parent,particle,x,y,z\n"
+                      "0,1,0,e-,0,0,-5\n0,1,0,e-,0,0,0\n0,1,0,e-,1,0,0.1\n"
+                      "0,2,1,gamma,1,0,0.1\n0,2,1,gamma,2,0,3\n0,3,1,e-,1,0,0.1\n")
+    out = scene.build(STACK, tracks, tmp_path / "scene.vtk")
+    text = out.read_text().splitlines()
+    n_points = int(next(t for t in text if t.startswith("POINTS")).split()[1])
+    head = next(i for i, t in enumerate(text) if t.startswith("LINES"))
+    n_lines = int(text[head].split()[1])
+    cells = [list(map(int, t.split())) for t in text[head + 1:head + 1 + n_lines]]
+    assert sum(len(c) - 1 for c in cells) == n_points
+    assert max(i for c in cells for i in c[1:]) == n_points - 1
+    kinds = [int(t) for t in text[-n_lines:]]
+    assert kinds.count(0) == 1 and kinds.count(1) == 1  # the 1-point track is dropped
+    assert kinds.count(scene.OUTLINE) == n_lines - 2

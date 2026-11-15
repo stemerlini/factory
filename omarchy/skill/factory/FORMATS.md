@@ -158,4 +158,5 @@ volumes:                                  # housing, collimators: tubes at absol
 
 Output `events.csv`: `species,E_MeV,<volume>_keV…,back,escape`, one row per primary. `back` = the
 primary last left the stack towards -z; `escape` = towards +z or sideways; both 0 = stopped
-inside. Volumes must not overlap. Place the GPS source in the macro in the same frame.
+inside. `tracks = 20` (param, 0 = none) also writes `tracks.csv` and `scene.vtk` (outlines +
+tracks, for f3d/ParaView). Volumes must not overlap. Place the GPS source in the macro in the same frame.

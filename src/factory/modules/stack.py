@@ -50,54 +50,56 @@ def sensitive(stack: dict) -> list[str]:
     return [str(layer["name"]) for layer in stack["layers"]]
 
 
-def to_gdml(stack: dict) -> str:
-    solids: list[str] = []
-    volumes: list[str] = []
-    placed: list[str] = []
-    used: set[str] = set()
-    extent = 0.0
-
-    def add(name: str, material: str, solid: str, z0: float, length: float) -> None:
-        if name in used:
-            raise StackError(f"duplicate volume name {name!r}")
-        used.add(name)
-        solids.append(solid)
-        volumes.append(f'<volume name="{name}"><materialref ref={quoteattr(material)}/>'
-                       f'<solidref ref="{name}_s"/></volume>')
-        placed.append(f'<physvol name="{name}_pv"><volumeref ref="{name}"/>'
-                      f'<position unit="mm" x="0" y="0" z="{z0 + length / 2:.9g}"/></physvol>')
-
+def placements(stack: dict) -> list[dict]:
+    """Every volume with its shape and place: ``name, material, shape ("tube"|"box"), rmin, rmax
+    (a box's ``rmax`` is its half-width), z0, length``, all in mm, z0 the front face."""
+    out: list[dict] = []
     z = 0.0
-    zmin, zmax = 0.0, 0.0
     for layer in stack["layers"]:
         name = str(layer["name"])
         z += float(layer.get("gap_mm", 0.0))
         t = _length_mm(layer, "thickness")
         if "radius_mm" in layer:
-            r = float(layer["radius_mm"])
-            solid = (f'<tube name="{name}_s" aunit="deg" lunit="mm" rmin="0" rmax="{r:.9g}" '
-                     f'z="{t:.9g}" startphi="0" deltaphi="360"/>')
-            extent = max(extent, r)
+            shape, rmax = "tube", float(layer["radius_mm"])
         elif "half_mm" in layer:
-            h = float(layer["half_mm"])
-            solid = (f'<box name="{name}_s" lunit="mm" x="{2 * h:.9g}" y="{2 * h:.9g}" '
-                     f'z="{t:.9g}"/>')
-            extent = max(extent, h * 2 ** 0.5)
+            shape, rmax = "box", float(layer["half_mm"])
         else:
             raise StackError(f"{name}: needs radius_mm (disc) or half_mm (square)")
-        add(name, str(layer["material"]), solid, z, t)
+        out.append({"name": name, "material": str(layer["material"]), "shape": shape,
+                    "rmin": 0.0, "rmax": rmax, "z0": z, "length": t})
         z += t
-        zmax = max(zmax, z)
     for vol in stack.get("volumes", []):
-        name = str(vol["name"])
-        rmin, rmax = float(vol.get("rmin_mm", 0.0)), float(vol["rmax_mm"])
-        length, z0 = float(vol["length_mm"]), float(vol["z_mm"])
-        solid = (f'<tube name="{name}_s" aunit="deg" lunit="mm" rmin="{rmin:.9g}" '
-                 f'rmax="{rmax:.9g}" '
-                 f'z="{length:.9g}" startphi="0" deltaphi="360"/>')
-        add(name, str(vol["material"]), solid, z0, length)
-        extent = max(extent, rmax)
-        zmin, zmax = min(zmin, z0), max(zmax, z0 + length)
+        out.append({"name": str(vol["name"]), "material": str(vol["material"]), "shape": "tube",
+                    "rmin": float(vol.get("rmin_mm", 0.0)), "rmax": float(vol["rmax_mm"]),
+                    "z0": float(vol["z_mm"]), "length": float(vol["length_mm"])})
+    return out
+
+
+def to_gdml(stack: dict) -> str:
+    solids: list[str] = []
+    volumes: list[str] = []
+    placed: list[str] = []
+    used: set[str] = set()
+    extent, zmin, zmax = 0.0, 0.0, 0.0
+    for v in placements(stack):
+        name, t, z0 = v["name"], v["length"], v["z0"]
+        if name in used:
+            raise StackError(f"duplicate volume name {name!r}")
+        used.add(name)
+        if v["shape"] == "box":
+            h = v["rmax"]
+            solids.append(f'<box name="{name}_s" lunit="mm" x="{2 * h:.9g}" y="{2 * h:.9g}" '
+                          f'z="{t:.9g}"/>')
+            extent = max(extent, h * 2 ** 0.5)
+        else:
+            solids.append(f'<tube name="{name}_s" aunit="deg" lunit="mm" rmin="{v["rmin"]:.9g}" '
+                          f'rmax="{v["rmax"]:.9g}" z="{t:.9g}" startphi="0" deltaphi="360"/>')
+            extent = max(extent, v["rmax"])
+        volumes.append(f'<volume name="{name}"><materialref ref={quoteattr(v["material"])}/>'
+                       f'<solidref ref="{name}_s"/></volume>')
+        placed.append(f'<physvol name="{name}_pv"><volumeref ref="{name}"/>'
+                      f'<position unit="mm" x="0" y="0" z="{z0 + t / 2:.9g}"/></physvol>')
+        zmin, zmax = min(zmin, z0), max(zmax, z0 + t)
 
     margin = float(stack.get("world_margin_mm", 50.0))
     half_xy, half_z = extent + margin, max(-zmin, zmax) + margin  # world centred on z = 0

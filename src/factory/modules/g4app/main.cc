@@ -1,11 +1,13 @@
 // factory-g4: generic Geant4 application for Factory.
-//   factory-g4 --gdml geometry.gdml [--physics FTFP_BERT_EMZ] [--sensitive A,B] [-t N] macro.mac
+//   factory-g4 --gdml geometry.gdml [--physics FTFP_BERT_EMZ] [--sensitive A,B] [--tracks N] [-t N] macro.mac
 // Geometry: GDML. Source: GPS, set in the macro. Output: one CSV row per event in
 // $FACTORY_OUTPUTS/events.csv: species, E_MeV, <volume>_keV for every sensitive volume
 // (default: every volume placed directly in the world), back, escape.
 //   back   = the primary last left the stack into the world moving towards -z
 //   escape = the primary last left the stack into the world moving towards +z or sideways
 // Both 0 = the primary stopped inside the stack.
+// --tracks N also writes tracks.csv (event,track,parent,particle,x,y,z in mm) for the first N
+// events, for the 3D scene.
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -17,6 +19,7 @@
 #include <vector>
 
 #include "G4Event.hh"
+#include "G4EventManager.hh"
 #include "G4GDMLParser.hh"
 #include "G4GeneralParticleSource.hh"
 #include "G4LogicalVolume.hh"
@@ -36,7 +39,8 @@
 namespace {
 std::vector<std::string> gNames;                       // sensitive volumes, in column order
 std::map<const G4LogicalVolume*, int> gIndex;          // read-only once the run starts
-std::ofstream gOut;
+std::ofstream gOut, gTracks;
+int gNTracks = 0;
 std::mutex gMutex;
 
 class Detector : public G4VUserDetectorConstruction {
@@ -85,6 +89,7 @@ class Gen : public G4VUserPrimaryGeneratorAction {
 struct EventData {
   std::vector<double> dep;
   int exit = 0;  // 0 contained, 1 back, 2 escaped
+  std::string tracks;
 };
 
 class Step : public G4UserSteppingAction {
@@ -98,6 +103,18 @@ class Step : public G4UserSteppingAction {
     if (pre && edep > 0) {
       auto it = gIndex.find(pre->GetLogicalVolume());
       if (it != gIndex.end()) d_->dep[it->second] += edep;
+    }
+    if (gNTracks > 0 && pre && G4EventManager::GetEventManager()->GetConstCurrentEvent()->GetEventID() < gNTracks) {
+      std::ostringstream r;
+      auto id = G4EventManager::GetEventManager()->GetConstCurrentEvent()->GetEventID();
+      auto row = [&](const G4ThreeVector& p) {
+        r << id << ',' << trk->GetTrackID() << ',' << trk->GetParentID() << ','
+          << trk->GetDefinition()->GetParticleName() << ',' << p.x() / mm << ',' << p.y() / mm << ','
+          << p.z() / mm << '\n';
+      };
+      if (trk->GetCurrentStepNumber() == 1) row(s->GetPreStepPoint()->GetPosition());
+      row(s->GetPostStepPoint()->GetPosition());
+      d_->tracks += r.str();
     }
     if (trk->GetParentID() != 0 || !pre) return;
     bool preStack = pre->GetMotherLogical() != nullptr;
@@ -114,7 +131,7 @@ class Step : public G4UserSteppingAction {
 class Evt : public G4UserEventAction {
  public:
   explicit Evt(EventData* d) : d_(d) {}
-  void BeginOfEventAction(const G4Event*) override { d_->dep.assign(gNames.size(), 0.0); d_->exit = 0; }
+  void BeginOfEventAction(const G4Event*) override { d_->dep.assign(gNames.size(), 0.0); d_->exit = 0; d_->tracks.clear(); }
   void EndOfEventAction(const G4Event* ev) override {
     auto* p = ev->GetPrimaryVertex()->GetPrimary();
     std::ostringstream row;
@@ -123,6 +140,7 @@ class Evt : public G4UserEventAction {
     row << ',' << int(d_->exit == 1) << ',' << int(d_->exit == 2) << '\n';
     std::lock_guard<std::mutex> lock(gMutex);
     gOut << row.str();
+    if (gNTracks > 0) gTracks << d_->tracks;
   }
  private:
   EventData* d_;
@@ -158,11 +176,12 @@ int main(int argc, char** argv) {
     if (a == "--gdml") gdml = next();
     else if (a == "--physics") physics = next();
     else if (a == "--sensitive") sensitive = next();
+    else if (a == "--tracks") gNTracks = std::atoi(next().c_str());
     else if (a == "-t") threads = std::atoi(next().c_str());
     else if (!a.empty() && a[0] == '-') { std::cerr << "factory-g4: unknown option " << a << "\n"; return 2; }
     else macro = a;
   }
-  if (gdml.empty()) { std::cerr << "usage: factory-g4 --gdml geometry.gdml [--physics LIST] [--sensitive A,B] [-t N] macro.mac\n"; return 2; }
+  if (gdml.empty()) { std::cerr << "usage: factory-g4 --gdml geometry.gdml [--physics LIST] [--sensitive A,B] [--tracks N] [-t N] macro.mac\n"; return 2; }
 
   auto rm = std::unique_ptr<G4RunManager>(G4RunManagerFactory::CreateRunManager(
       threads > 0 ? G4RunManagerType::MT : G4RunManagerType::Serial));
@@ -179,7 +198,9 @@ int main(int argc, char** argv) {
   gOut << "species,E_MeV";
   for (auto& n : gNames) gOut << ',' << n << "_keV";
   gOut << ",back,escape\n";
+  if (gNTracks > 0) gTracks.open(std::string(out ? out : ".") + "/tracks.csv"), gTracks << "event,track,parent,particle,x,y,z\n";
   if (!macro.empty()) G4UImanager::GetUIpointer()->ApplyCommand("/control/execute " + macro);
   gOut.flush();
+  gTracks.flush();
   return 0;
 }

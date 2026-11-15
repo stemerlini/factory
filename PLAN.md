@@ -401,6 +401,10 @@ The particle-telescope and plasma-thruster trees live on as test fixtures.
      GPS macro source, physics-list parameter, per-volume deposits plus `back`/`escape` flags
      in `events.csv`. Per-event CSV rather than HDF5 for now (no extra dependency); the
      viewer tool still needs a Qt-enabled Geant4.
+   - 2026-11-15: 3D view without Qt: `factory-g4 --tracks N` writes `tracks.csv`; the run builds
+     `scene.vtk` (legacy VTK polylines: wireframe outlines, so tracks inside solids stay
+     visible) opened by f3d/ParaView through the existing viewers. No live animation: runs are
+     batch and fast.
 5. **Baselines** — lock/unlock, tags, frozen reports, change impact on children.
 6. **Electronics** — ngspice studies (metrics from `.meas`), KiCad ERC/DRC, BOM + Gerbers.
 7. **Mechanics** — FreeCAD/build123d, STEP export, FEA (CalculiX/Elmer), drawings.
