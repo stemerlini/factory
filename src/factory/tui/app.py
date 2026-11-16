@@ -619,6 +619,7 @@ class FactoryApp(App):
         elif item.kind in ("failed", "stale"):
             self.action_tab("studies")
             table = self.query_one("#study-table", DataTable)
+            table.focus()
             try:
                 table.move_cursor(row=table.get_row_index(item.target))
             except Exception:  # noqa: BLE001 - the row may have gone since the refresh
@@ -901,7 +902,14 @@ class FactoryApp(App):
         self.notify(f"Copied {lines} line{'s' * (lines != 1)}", timeout=2)
 
     def action_tab(self, tab: str) -> None:
-        self.query_one("#tabs", TabbedContent).active = tab
+        tabs = self.query_one("#tabs", TabbedContent)
+        tabs.active = tab
+        # A pane activates itself when something in it takes focus: focus left in the old
+        # pane would fall to its next widget and switch straight back.
+        pane = self.query_one(f"#{tab}", TabPane)
+        if self.focused and tabs in self.focused.ancestors and pane not in self.focused.ancestors:
+            target = next((w for w in pane.query("*") if w.focusable), None)
+            (target or self.query_one("#elements", Tree)).focus()
 
     def action_modules(self) -> None:
         if self.project:

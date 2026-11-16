@@ -128,32 +128,29 @@ def fingerprint(project: Project, study: Study) -> str:
     return h.hexdigest()[:16]
 
 
-_digests: dict[Path, tuple[tuple[int, int], bytes]] = {}
-
-
-def _digest(path: Path) -> bytes:
-    """A file's SHA-256, computed again only when its size or mtime changes: the TUI
-    fingerprints every study on each refresh, and inputs can be large."""
-    st = path.stat()
-    stamp = (st.st_mtime_ns, st.st_size)
-    hit = _digests.get(path)
-    if hit is None or hit[0] != stamp:
-        hit = _digests[path] = (stamp, hashlib.sha256(path.read_bytes()).digest())
-    return hit[1]
+_digests: dict[Path, tuple[tuple, str]] = {}
 
 
 def hash_tree(path: Path, skip: tuple[str, ...] = ()) -> str:
-    h = hashlib.sha256()
+    """The SHA-256 of a file, or of a folder's relative paths and file contents. Runs on disk
+    record it, so its value must not change; it is computed again only when a file's size or
+    mtime changes, as the TUI fingerprints every study on each refresh and inputs can be large."""
     if path.is_file():
-        h.update(_digest(path))
+        files = [(path, "")]
     elif path.is_dir():
-        for f in sorted(path.rglob("*")):
-            rel = f.relative_to(path)
-            if f.is_file() and not (rel.parts[0] in skip or "__pycache__" in rel.parts):
-                h.update(str(rel).encode() + b"\0" + _digest(f) + b"\0")
+        files = [(f, str(rel)) for f in sorted(path.rglob("*"))
+                 if f.is_file() and not ((rel := f.relative_to(path)).parts[0] in skip
+                                         or "__pycache__" in rel.parts)]
     else:
-        h.update(b"missing")
-    return h.hexdigest()
+        return hashlib.sha256(b"missing").hexdigest()
+    stamp = (skip, tuple((rel, (st := f.stat()).st_mtime_ns, st.st_size) for f, rel in files))
+    hit = _digests.get(path)
+    if hit is None or hit[0] != stamp:
+        h = hashlib.sha256()
+        for f, rel in files:
+            h.update(f.read_bytes() if not rel else rel.encode() + b"\0" + f.read_bytes() + b"\0")
+        hit = _digests[path] = (stamp, h.hexdigest())
+    return hit[1]
 
 
 def states(project: Project) -> dict[str, StudyState]:  # keyed by study key

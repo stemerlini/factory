@@ -107,3 +107,16 @@ def test_failing_derived_requirement_fails_the_parent(make):
     assert by_id(p)["ME-001"].status == trace.FAIL
     assert by_id(p)["SYS-005"].status == trace.FAIL
     assert "ME-001" in by_id(p)["SYS-005"].reason
+
+
+def test_fingerprints_match_runs_recorded_before_the_digest_cache(tmp_path):
+    import hashlib
+
+    (tmp_path / "d" / "sub").mkdir(parents=True)
+    (tmp_path / "d" / "a.txt").write_text("alpha")
+    (tmp_path / "d" / "sub" / "b.bin").write_bytes(b"\0beta")
+    old = hashlib.sha256(b"a.txt\0alpha\0" + b"sub/b.bin\0\0beta\0").hexdigest()
+    assert pipeline.hash_tree(tmp_path / "d") == old
+    assert pipeline.hash_tree(tmp_path / "d" / "a.txt") == hashlib.sha256(b"alpha").hexdigest()
+    (tmp_path / "d" / "a.txt").write_text("alphA")
+    assert pipeline.hash_tree(tmp_path / "d") != old
