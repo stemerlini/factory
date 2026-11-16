@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import re
 import shutil
 import subprocess
@@ -174,12 +175,27 @@ def find_root(start: Path) -> Path:
     raise ProjectError(f"not inside a Factory project (no {MANIFEST} in {start} or above)")
 
 
+# libyaml's loader parses ten times faster than the pure-Python one, where it is installed.
+YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+_parsed: dict[Path, tuple[tuple[int, int], dict[str, Any], str]] = {}
+
+
+def load_yaml(text: str) -> Any:
+    return yaml.load(text, Loader=YAML_LOADER)
+
+
 def read_frontmatter(path: Path) -> tuple[dict[str, Any], str]:
-    text = path.read_text()
-    m = FRONTMATTER.match(text)
-    if not m:
-        return {}, text
-    return yaml.safe_load(m.group(1)) or {}, m.group(2).strip()
+    """A Markdown file's YAML front matter and body. The TUI rereads every file each refresh,
+    so a parse is kept until the file changes; callers get their own copy of the metadata."""
+    st = path.stat()
+    key = (st.st_mtime_ns, st.st_size)
+    hit = _parsed.get(path)
+    if hit is None or hit[0] != key:
+        text = path.read_text()
+        m = FRONTMATTER.match(text)
+        meta, body = (load_yaml(m.group(1)) or {}, m.group(2).strip()) if m else ({}, text)
+        hit = _parsed[path] = (key, meta, body)
+    return copy.deepcopy(hit[1]), hit[2]
 
 
 def read_element(folder: Path, path: str) -> Element:
@@ -232,8 +248,21 @@ def read_requirement(path: Path, element: str = "") -> Requirement:
     )
 
 
+_studies: dict[tuple[Path, str], tuple[tuple[int, int], Study]] = {}
+
+
 def read_study(folder: Path, element: str = "") -> Study:
+    """A study from its study.toml, parsed again only when the file changes."""
     path = folder / "study.toml"
+    st = path.stat()
+    stamp = (st.st_mtime_ns, st.st_size)
+    hit = _studies.get((path, element))
+    if hit is None or hit[0] != stamp:
+        hit = _studies[path, element] = (stamp, _parse_study(folder, path, element))
+    return copy.deepcopy(hit[1])
+
+
+def _parse_study(folder: Path, path: Path, element: str) -> Study:
     try:
         d = tomllib.loads(path.read_text())
     except tomllib.TOMLDecodeError as e:

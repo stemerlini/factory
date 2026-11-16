@@ -116,7 +116,7 @@ def load(element_dir: Path) -> Architecture | None:
     path = element_dir / FILE
     if not path.is_file():
         return None
-    data = yaml.safe_load(path.read_text()) or {}
+    data = yaml.load(path.read_text(), Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader)) or {}
     blocks = [Block(str(b["id"]), str(b.get("title", b["id"])), b.get("kind", "generic"),
                     b.get("element"), b.get("description", ""))
               for b in data.get("blocks", [])]

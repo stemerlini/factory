@@ -84,30 +84,83 @@ def blocks(session: live.Live | None, element: str) -> list[str | Text]:
     return found
 
 
+class Earlier(Static):
+    """The line above a long transcript: how much is not shown, and a click shows more."""
+
+    def on_click(self) -> None:
+        self.parent.show_more()
+
+
 class Transcript(Vertical):
     """The conversation as a column of widgets, updated in place: only the blocks that
-    changed are re-rendered, so a streaming reply does not redraw the whole history."""
+    changed are re-rendered, so a streaming reply does not redraw the whole history. Only
+    the latest blocks are mounted: every widget adds to each layout pass, and a long session
+    would otherwise make a streaming reply stutter."""
+
+    LIMIT = 20  # blocks mounted at first
+    STEP = 10  # the window moves on in steps, so a new block rarely remounts anything
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.shown: list[str | Text] = []
+        self.found: list[str | Text] = []
+        self.start = 0
+        self.limit = self.LIMIT
+
+    def compose(self) -> ComposeResult:
+        yield Earlier(classes="agent-earlier")
+
+    def reset(self) -> None:
+        for w in list(self.children)[1:]:
+            w.remove()
+        self.shown, self.start, self.limit = [], 0, self.LIMIT
+
+    def show_more(self) -> None:
+        limit, found = self.limit + self.LIMIT, self.found
+        self.reset()
+        self.limit = limit
+        self.show(found)
 
     def show(self, found: list[str | Text]) -> None:
-        widgets = list(self.children)
-        for i, block in enumerate(found):
+        self.found = found
+        widgets = list(self.children)[1:]
+        if not self.shown or self.start > len(found):
+            for w in widgets:
+                w.remove()
+            widgets, self.shown = [], []
+            self.start = max(0, len(found) - self.limit)
+        elif len(found) - self.start > self.limit + self.STEP:
+            drop = min(len(found) - self.limit - self.start, len(self.shown))
+            for w in widgets[:drop]:
+                w.remove()
+            widgets, self.shown = widgets[drop:], self.shown[drop:]
+            self.start += drop
+        visible = found[self.start:]
+        for i, block in enumerate(visible):
             if i < len(self.shown) and type(self.shown[i]) is type(block):
-                if self.shown[i] != block:
+                old = self.shown[i]
+                if old == block:
+                    continue
+                # A streaming reply only grows: parse the new tail, not the whole reply.
+                if isinstance(block, str) and block.startswith(old):
+                    widgets[i].append(block[len(old):])
+                else:
                     widgets[i].update(block)
                 continue
             for w in widgets[i:]:
                 w.remove()
             self.mount_all(Markdown(b, classes="agent-reply") if isinstance(b, str) else
-                           Static(b, classes="agent-lines") for b in found[i:])
+                           Static(b, classes="agent-lines") for b in visible[i:])
             break
         else:
-            for w in widgets[len(found):]:
+            for w in widgets[len(visible):]:
                 w.remove()
-        self.shown = [b.copy() if isinstance(b, Text) else b for b in found]
+        self.shown = [b.copy() if isinstance(b, Text) else b for b in visible]
+        earlier = self.query_one(Earlier)
+        earlier.display = self.start > 0
+        if self.start:
+            earlier.update(Text.assemble((f"▲ {self.start} earlier blocks", "dim"),
+                                         ("  click to show more", "dim italic")))
 
 
 class Question(Vertical, can_focus=True):
@@ -179,8 +232,7 @@ class AgentPane(Vertical):
         transcript = self.query_one(Transcript)
         if getattr(self, "_session", None) is not session:
             self._session = session
-            transcript.remove_children()
-            transcript.shown = []
+            transcript.reset()
         transcript.show(blocks(session, element))
         if follow:
             scroll.call_after_refresh(scroll.scroll_end, animate=False)

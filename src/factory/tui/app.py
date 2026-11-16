@@ -163,6 +163,8 @@ class FactoryApp(App):
         self._log_pos = 0
         self._git_seen: tuple = ()
         self._agent_live = False
+        self._ticking = False
+        self._journal_shown: list = []
         self.pending: list[review.Change] = []
         self.marks: dict[str, dict] = {}  # the review in progress, per file
         self.home = home.Home()
@@ -250,6 +252,7 @@ class FactoryApp(App):
             self.register_theme(theme)
             self.theme = theme.name
         self.query_one("#elements", Tree).show_root = False
+        self._project_line = self.query_one("#project-line", Static)
         self.query_one("#check-table", DataTable).add_columns("", "Gate", "Status")
         self.query_one("#req-table", DataTable).add_columns(
             "", "Id", "Title", "Criterion", "Value", "Parent", "Derived", "Allocated", "Why")
@@ -340,19 +343,24 @@ class FactoryApp(App):
     def element(self) -> Element | None:
         return self.elements.get(self.element_path)
 
-    def refresh_all(self) -> None:
+    def load_state(self, project: Project, elements: dict[str, Element]) -> tuple:
+        """Read the project's state from disk: no widgets touched, so it can run in a thread."""
+        states = pipeline.states(project)
+        traces = trace.trace(project, states)
+        gate_states = {p: gates.gates(project, e, states, traces) for p, e in elements.items()}
+        checks = {p: guide.checklist(project, e, states, traces) for p, e in elements.items()}
+        board = home.build(project, list(elements.values()), states, gate_states, checks=checks)
+        return states, traces, gate_states, checks, board
+
+    def refresh_all(self, state: tuple | None = None) -> None:
         if not self.project:
             return
         try:
-            self.states = pipeline.states(self.project)
-            self.traces = trace.trace(self.project, self.states)
-            self.gate_states = {p: gates.gates(self.project, e, self.states, self.traces)
-                                for p, e in self.elements.items()}
-            self.checks = {p: guide.checklist(self.project, e, self.states, self.traces)
-                           for p, e in self.elements.items()}
+            state = state or self.load_state(self.project, self.elements)
         except ProjectError as e:
             self.notify(str(e), severity="error", timeout=8)
             return
+        self.states, self.traces, self.gate_states, self.checks, board = state
         for event in journal.passed_gates(self.project, self.gate_states,
                                           {p: e.title for p, e in self.elements.items()}):
             self.notify(event.title, title="★ Gate passed", timeout=6)
@@ -361,7 +369,7 @@ class FactoryApp(App):
         self.refresh_tree_labels()
         self.refresh_element()
         self.refresh_review()
-        self.refresh_home()
+        self.refresh_home(board)
 
     def refresh_element(self) -> None:
         if not self.element:
@@ -379,27 +387,52 @@ class FactoryApp(App):
             files.path = self.element.dir
 
     def tick(self) -> None:
-        """Refresh when runs are active or files changed (an agent at work); follow the log."""
-        if not self.project:
-            return
-        seen = tuple((c.code, c.path) for c in review.changes(self.project))
-        try:
-            mtimes = tuple(f.stat().st_mtime_ns for f in
-                           (self.project.root / c.path for c in self.pending) if f.exists())
-        except OSError:
-            mtimes = ()
-        changed = (seen, mtimes) != self._git_seen
-        live = bool(agent.running(self.project))
-        if live != self._agent_live:
-            self._agent_live = live
-            self.refresh_topbar()
-        self._git_seen = (seen, mtimes)
-        if changed or any(s.status == pipeline.RUNNING for s in self.states.values()):
-            if changed and {p for p in self.elements} != {e.path for e in
-                                                          self.project.elements()}:
-                self.rebuild_tree()
-            self.refresh_all()
+        """Refresh when runs are active or files changed (an agent at work); follow the log.
+        Looking (git, the process list, every study's inputs) happens in a thread, so the
+        screen stays responsive while an agent edits files; only drawing is done here."""
         self.refresh_log()
+        if self.project and not self._ticking:
+            self._ticking = True
+            self.run_worker(partial(self.scan, self.project, dict(self.elements),
+                                    self._git_seen, self.states), thread=True, group="tick")
+
+    def scan(self, project: Project, elements: dict[str, Element], before: tuple,
+             states: dict) -> None:
+        try:
+            changes = review.changes(project)
+            seen = tuple((c.code, c.path) for c in changes)
+            try:
+                mtimes = tuple(f.stat().st_mtime_ns for f in
+                               (project.root / c.path for c in changes) if f.exists())
+            except OSError:
+                mtimes = ()
+            changed = (seen, mtimes) != before
+            alive = bool(agent.running(project))
+            reshaped = changed and set(elements) != {e.path for e in project.elements()}
+            state = None
+            if (changed or any(s.status == pipeline.RUNNING for s in states.values())) \
+                    and not reshaped:
+                state = self.load_state(project, elements)
+            self.call_from_thread(self.scanned, project, (seen, mtimes), alive,
+                                  changed or state is not None, reshaped, state)
+        except (ProjectError, OSError):
+            pass
+        finally:
+            self._ticking = False
+
+    def scanned(self, project: Project, seen: tuple, alive: bool, refresh: bool,
+                reshaped: bool, state: tuple | None) -> None:
+        if project is not self.project:
+            return  # another project was opened meanwhile
+        self._git_seen = seen
+        if alive != self._agent_live:
+            self._agent_live = alive
+            self.refresh_topbar()
+        if reshaped:
+            self.rebuild_tree()
+            self.refresh_all()
+        elif refresh:
+            self.refresh_all(state)
 
     # --- top, tree, gates --------------------------------------------------------------------
 
@@ -410,7 +443,8 @@ class FactoryApp(App):
         def step() -> None:
             i = next(frames, None)
             art = logo.cheer(i) if i is not None else logo.FACTORY
-            self.query_one("#brand-logo", Static).update(logo.render(art))
+            for brand in self.query("#brand-logo"):  # gone if the app is closing
+                brand.update(logo.render(art))
 
         self.set_interval(0.2, step, repeat=13)
 
@@ -491,9 +525,9 @@ class FactoryApp(App):
 
     # --- home and journal ------------------------------------------------------------------
 
-    def refresh_home(self) -> None:
-        h = home.build(self.project, list(self.elements.values()), self.states,
-                       self.gate_states, checks=self.checks)
+    def refresh_home(self, h: home.Home | None = None) -> None:
+        h = h or home.build(self.project, list(self.elements.values()), self.states,
+                            self.gate_states, checks=self.checks)
         h.waiting[:0] = [home.Item("agent", f"{lv.title} asks to "
                                    f"{lv.asking.command or lv.asking.entry.text}", path)
                          for path, lv in self.lives.items() if lv.asking]
@@ -554,10 +588,14 @@ class FactoryApp(App):
         self.refresh_journal()
 
     def refresh_journal(self) -> None:
+        shown = [(e.when, e.kind, e.title, e.element, e.detail) for e in self.home.events[:500]]
+        if shown == self._journal_shown:
+            return  # 500 rows are slow to rebuild; most refreshes change nothing here
+        self._journal_shown = shown
         table = self.query_one("#journal-table", DataTable)
         keep = table.cursor_row
         table.clear()
-        for n, e in enumerate(journal.events(self.project, limit=500)):
+        for n, e in enumerate(self.home.events[:500]):
             title = self.elements[e.element].title if e.element in self.elements else ""
             table.add_row(Text(f"{e.when:%Y-%m-%d %H:%M}" if e.when.year > 1 else "", "dim"),
                           mark(journal.MARKS.get(e.kind, "·"), JOURNAL_STYLE.get(e.kind, "")),
@@ -1105,10 +1143,12 @@ class FactoryApp(App):
         waiting = [d for d in found if d.status == "proposed"]
         text = review.proposal(p)
         if self.pending or waiting:
-            self.query_one("#proposal", Markdown).update(
-                text or "_No proposal note: the changes below came without an explanation._")
+            text = text or "_No proposal note: the changes below came without an explanation._"
         else:
-            self.query_one("#proposal", Markdown).update("_Nothing waiting for review._")
+            text = "_Nothing waiting for review._"
+        proposal = self.query_one("#proposal", Markdown)
+        if proposal.source != text:  # re-parsing an unchanged note costs a redraw
+            proposal.update(text)
         self.marks = review.marks(p)
         table = self.query_one("#change-table", DataTable)
         keep = table.cursor_row
@@ -1350,7 +1390,8 @@ class FactoryApp(App):
     def agent_changed(self, session: live.Live) -> None:
         """Called by a session on every update: mark the panes for the next redraw, and say
         at once when the agent asks something."""
-        if not self.query("#project-line"):
+        line = getattr(self, "_project_line", None)
+        if line is None or not line.is_attached:
             return  # the app is closing; the session is being shut down
         self._agent_dirty = True
         before = self._agent_states.get(session.element)
