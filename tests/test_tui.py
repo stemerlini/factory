@@ -188,6 +188,26 @@ async def test_long_transcript_mounts_only_recent_blocks():
         assert len(t.children) == 2 * Transcript.LIMIT + 1
 
 
+async def test_transcript_keeps_up_with_quick_updates():
+    from rich.text import Text
+    from textual.app import App
+    from textual.widgets import Markdown, Static
+
+    from factory.tui.agentpane import Transcript
+
+    class Host(App):
+        def compose(self):
+            yield Transcript()
+
+    async with Host().run_test() as pilot:
+        t = pilot.app.query_one(Transcript)
+        t.show(["thinking", Text("$ ls")])
+        t.show(["thinking", "planning"])  # before the first blocks are mounted or removed
+        t.show(["thinking", "planning", Text("$ ls")])
+        await pilot.pause()
+        assert [type(w) for w in t.children[1:]] == [Markdown, Markdown, Static]
+
+
 def test_editor_command_splits_flags(monkeypatch, tmp_path):
     from factory.tui.app import editor_command
 

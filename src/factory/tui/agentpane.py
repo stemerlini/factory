@@ -12,6 +12,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
 from textual.message import Message
+from textual.widget import Widget
 from textual.widgets import Input, Markdown, Static
 
 from .. import acp, live
@@ -103,6 +104,9 @@ class Transcript(Vertical):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.shown: list[str | Text] = []
+        # The widget of each shown block: mounting and removing finish later, so
+        # ``children`` can lag behind when updates come quickly.
+        self.widgets: list[Widget] = []
         self.found: list[str | Text] = []
         self.start = 0
         self.limit = self.LIMIT
@@ -111,9 +115,9 @@ class Transcript(Vertical):
         yield Earlier(classes="agent-earlier")
 
     def reset(self) -> None:
-        for w in list(self.children)[1:]:
+        for w in self.widgets:
             w.remove()
-        self.shown, self.start, self.limit = [], 0, self.LIMIT
+        self.widgets, self.shown, self.start, self.limit = [], [], 0, self.LIMIT
 
     def show_more(self) -> None:
         limit, found = self.limit + self.LIMIT, self.found
@@ -123,7 +127,7 @@ class Transcript(Vertical):
 
     def show(self, found: list[str | Text]) -> None:
         self.found = found
-        widgets = list(self.children)[1:]
+        widgets = self.widgets
         if not self.shown or self.start > len(found):
             for w in widgets:
                 w.remove()
@@ -149,12 +153,15 @@ class Transcript(Vertical):
                 continue
             for w in widgets[i:]:
                 w.remove()
-            self.mount_all(Markdown(b, classes="agent-reply") if isinstance(b, str) else
-                           Static(b, classes="agent-lines") for b in visible[i:])
+            widgets = widgets[:i] + [Markdown(b, classes="agent-reply") if isinstance(b, str)
+                                     else Static(b, classes="agent-lines") for b in visible[i:]]
+            self.mount_all(widgets[i:])
             break
         else:
             for w in widgets[len(visible):]:
                 w.remove()
+            widgets = widgets[:len(visible)]
+        self.widgets = widgets
         self.shown = [b.copy() if isinstance(b, Text) else b for b in visible]
         earlier = self.query_one(Earlier)
         earlier.display = self.start > 0
