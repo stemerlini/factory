@@ -91,6 +91,24 @@ async def test_home_opens_what_waits(make):
         assert app.element_path == "fee"
 
 
+async def test_home_opens_a_stale_study(make):
+    p = make()
+    runs.execute(p, p.study("S001"))
+    stack = p.root / "geometry/stack.yaml"
+    stack.write_text(stack.read_text().replace("gap_mm: 20.0", "gap_mm: 500.0"))
+    app = FactoryApp(p.root)
+    async with app.run_test(size=(150, 44)) as pilot:
+        await pilot.pause()
+        waiting = app.query_one("#waiting-table", DataTable)
+        waiting.focus()
+        waiting.move_cursor(row=next(i for i, item in enumerate(app.home.waiting)
+                                     if item.kind == "stale"))
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app._tab() == "studies"
+        assert app.focused is app.query_one("#study-table", DataTable)
+
+
 async def test_gate_items_do_themselves(make, monkeypatch):
     p = make()
     app = FactoryApp(p.root)
