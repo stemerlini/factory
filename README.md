@@ -107,10 +107,19 @@ Pick yours in `~/.config/factory/config.toml`, or per project in `factory.toml`:
 ```toml
 [agent]
 default = "copilot"
+model = "claude-opus-5.5"      # optional; else the agent's own default
+fallback = "claude-opus-5.5"   # switched to when a prompt fails for want of credit
+
+[agent.models]                 # per element kind: CAD and electrical work
+mechanical = "gpt-6-astra"
+electronics = "gpt-6-astra"
 
 [agents.mine]            # any other ACP agent
 command = ["my-agent", "--acp"]
 ```
+
+The pane's header names the model in use; when a model fails it says so and the switch to
+the fallback. Request dev sessions start with `[agent] model`.
 
 Factory answers the agent's permission requests itself. Reading and editing inside the
 project are allowed; commands and anything outside the project are asked in the pane

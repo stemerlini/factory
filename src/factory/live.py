@@ -4,6 +4,10 @@ Any agent that speaks ACP works: GitHub Copilot and opencode do natively, Claude
 Codex through their ACP adapters. The user picks one in ``~/.config/factory/config.toml``
 (``[agent] default``), a project can pick its own in ``factory.toml``, and ``[agents.<name>]
 command = [...]`` adds or overrides how one is started.
+
+``[agent] model`` picks the model, ``[agent.models]`` one per element kind (``mechanical =
+"gpt-6-astra"``), and ``[agent] fallback`` the model to switch to when a prompt fails for
+want of credit or capacity.
 """
 
 from __future__ import annotations
@@ -15,7 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from . import acp, config, journal
-from .project import Project
+from .project import Project, ProjectError
 
 AGENTS = {
     "claude": ("Claude Code", ["claude-agent-acp"],
@@ -33,6 +37,26 @@ STARTING, WORKING, ASKING, READY, STOPPED, FAILED = (
 
 def default_name(project: Project | None = None) -> str:
     return (project and project.agent) or config.load().get("agent", {}).get("default") or DEFAULT
+
+
+# What a prompt that failed for want of credit or capacity says, so the fallback can step in.
+SHORTAGE = ("quota", "credit", "allowance", "limit", "premium", "unavailable",
+            "not available", "overloaded", "capacity", "429", "402")
+
+
+def model_for(project: Project, element: str) -> str:
+    """The model for ``element``: its kind's (``[agent.models]``), else ``[agent] model``,
+    else "" (the agent's own default)."""
+    settings = config.load().get("agent", {})
+    try:
+        kind = project.element(element).kind
+    except ProjectError:
+        kind = ""
+    return settings.get("models", {}).get(kind) or settings.get("model", "")
+
+
+def fallback_model() -> str:
+    return config.load().get("agent", {}).get("fallback", "")
 
 
 def title(name: str) -> str:
@@ -102,6 +126,7 @@ class Live:
         self.state = STARTING
         self.error = ""
         self.session_id: str | None = None
+        self.model = ""
         # Agents may ask several things at once (Copilot asks for an MCP call and a command
         # together); each waits its turn, or an answer would go to the wrong one.
         self.questions: list[Asking] = []
@@ -130,19 +155,36 @@ class Live:
             await self.conn.start()
             params = {"cwd": str(self.project.root), "mcpServers": []}
             last = remembered(self.project).get(self.element, {})
+            opened: dict = {}
             if self.conn.can_load and last.get("agent") == self.name and last.get("session"):
                 try:
-                    await self.conn.request("session/load", {**params,
-                                                              "sessionId": last["session"]})
+                    opened = await self.conn.request("session/load", {
+                        **params, "sessionId": last["session"]}) or {}
                     self.session_id = last["session"]
                 except acp.AgentError:
                     self.entries.clear()
             if not self.session_id:
-                self.session_id = (await self.conn.request("session/new", params))["sessionId"]
+                opened = await self.conn.request("session/new", params)
+                self.session_id = opened["sessionId"]
                 remember(self.project, self.element, self.name, self.session_id)
+            self.model = (opened.get("models") or {}).get("currentModelId", "")
+            wanted = model_for(self.project, self.element)
+            if wanted and wanted != self.model:
+                await self.use_model(wanted)
             self._set(READY)
         except (acp.AgentError, KeyError, TypeError) as exc:
             self.fail(exc)
+
+    async def use_model(self, model: str) -> bool:
+        """Switch the session to ``model``; an agent that cannot is told in the pane."""
+        try:
+            await self.conn.request("session/set_model", {"sessionId": self.session_id,
+                                                          "modelId": model})
+        except acp.AgentError as exc:
+            self.entries.append(Entry("error", f"Could not use {model}: {exc}"))
+            return False
+        self.model = model
+        return True
 
     @property
     def resumed(self) -> bool:
@@ -153,9 +195,22 @@ class Live:
             return
         self.entries.append(Entry("user", text))
         self._set(WORKING)
+        prompt = {"sessionId": self.session_id, "prompt": [{"type": "text", "text": text}]}
         try:
-            result = await self.conn.request("session/prompt", {
-                "sessionId": self.session_id, "prompt": [{"type": "text", "text": text}]})
+            try:
+                result = await self.conn.request("session/prompt", prompt)
+            except acp.AgentError as exc:
+                fallback = fallback_model()
+                if not (fallback and fallback != self.model
+                        and any(w in str(exc).lower() for w in SHORTAGE)):
+                    raise
+                failed = self.model or "the model"
+                if not await self.use_model(fallback):
+                    raise
+                self.entries.append(Entry("error", f"{failed} failed ({exc}); "
+                                                   f"switched to {fallback}"))
+                self.changed(self)
+                result = await self.conn.request("session/prompt", prompt)
         except acp.AgentError as exc:
             if "authentication required" in str(exc).lower():
                 exc = acp.AgentError(f"{self.title} is not logged in: log in once in a terminal "

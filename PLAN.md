@@ -296,6 +296,11 @@ one client works with any agent that speaks it:
 
 - Agents are listed in the config: a name, a command, and an optional default model.
   `factory.toml [agent] default = "copilot"` picks one per project. `a` lets you choose.
+- Models (decided 2026-11-16): `[agent] model` for every session and request dev session,
+  `[agent.models]` per element kind (CAD and electrical work on `mechanical`/`electronics`
+  elements can use another model), and `[agent] fallback` to switch to, once, when a
+  prompt fails for want of credit or capacity. Set over ACP `session/set_model`; the pane
+  header names the model in use.
 - **The Agent pane** (a tab, and a drawer that toggles from any tab) shows the
   conversation streaming in: messages, the agent's plan, tool calls with the files
   they touch, and a prompt box. Sessions are listed per element and can be resumed (ACP

@@ -225,8 +225,9 @@ class AgentPane(Vertical):
     def show(self, session: live.Live | None, element: str) -> None:
         state, style = STATE_STYLE.get(session.state, ("", "")) if session else ("", "")
         self.query_one(".agent-head", Static).update(Text.assemble(
-            (session.title if session else "Agent", "bold"), "  ·  ", (element, "dim"),
-            "  ", (state, style)))
+            (session.title if session else "Agent", "bold"),
+            (f" ({session.model})" if session and session.model else "", "dim"),
+            "  ·  ", (element, "dim"), "  ", (state, style)))
         scroll = self.query_one(".agent-scroll", VerticalScroll)
         follow = scroll.scroll_y >= scroll.max_scroll_y - 2
         transcript = self.query_one(Transcript)

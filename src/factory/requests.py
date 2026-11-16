@@ -361,9 +361,11 @@ def agent_kind() -> str:
 def dev_command(r: Request) -> list[str]:
     """The user's agent, interactive, in the tool's repository, briefed with the request."""
     brief = prompt(r)
+    model = config.load().get("agent", {}).get("model")
+    pick = ["--model", model] if model else []
     if agent_kind() == "copilot":
-        return ["copilot", "-n", f"{r.to}: {r.id}", "-i", brief]
-    return ["claude", "-n", f"{r.to}: {r.id}", brief]
+        return ["copilot", *pick, "-n", f"{r.to}: {r.id}", "-i", brief]
+    return ["claude", *pick, "-n", f"{r.to}: {r.id}", brief]
 
 
 def repo_of(r: Request) -> Path:

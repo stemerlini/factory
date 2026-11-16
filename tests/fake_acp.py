@@ -1,5 +1,6 @@
 """A tiny ACP agent for the tests: on every prompt it asks to commit, to edit a file in the
-project, and to run pytest twice, then says what it was allowed to do."""
+project, and to run pytest twice, then says what it was allowed to do. Asked just "hi", it
+says which model it runs; a model named "broke-*" fails every prompt as out of credit."""
 
 import json
 import os
@@ -23,6 +24,7 @@ TOOLS = [("execute", {"command": "git commit -am done"}, []),
          ("execute", {"command": "pytest -q"}, []),
          ("execute", {"command": "pytest -x"}, [])]
 next_id = 1000
+model = "base"
 for line in sys.stdin:
     msg = json.loads(line)
     if "id" not in msg or "method" not in msg:
@@ -32,13 +34,26 @@ for line in sys.stdin:
         send({"id": msg["id"], "result": {"protocolVersion": 1,
                                           "agentCapabilities": {"loadSession": True}}})
     elif method == "session/new":
-        send({"id": msg["id"], "result": {"sessionId": "s1"}})
+        send({"id": msg["id"], "result": {"sessionId": "s1", "models": {
+            "currentModelId": model, "availableModels": [{"modelId": model}]}}})
+    elif method == "session/set_model":
+        model = params["modelId"]
+        send({"id": msg["id"], "result": {}})
     elif method == "session/load":
         update(params["sessionId"], sessionUpdate="user_message_chunk",
                content={"type": "text", "text": "earlier"})
         send({"id": msg["id"], "result": {}})
     elif method == "session/prompt":
         sid, outcomes = params["sessionId"], []
+        if model.startswith("broke"):
+            send({"id": msg["id"], "error": {"code": 402, "message":
+                  "You have exceeded your premium request allowance"}})
+            continue
+        if params["prompt"][0]["text"] == "hi":
+            update(sid, sessionUpdate="agent_message_chunk", messageId="m0",
+                   content={"type": "text", "text": f"model {model}"})
+            send({"id": msg["id"], "result": {"stopReason": "end_turn"}})
+            continue
         update(sid, sessionUpdate="agent_message_chunk", messageId="m1",
                content={"type": "text", "text": "Hello "})
         update(sid, sessionUpdate="agent_message_chunk", messageId="m1",
