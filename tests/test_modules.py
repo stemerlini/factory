@@ -156,6 +156,26 @@ def test_cad_part_from_brick_is_merged_into_the_world(tmp_path):
     assert scene._turn((1, 0, 0), (0, 0, 90)) == pytest.approx((0, -1, 0))
 
 
+def test_stack_of_cad_parts_only_needs_no_layers(tmp_path):
+    import xml.etree.ElementTree as ET
+
+    import yaml
+
+    from factory.modules import stack
+
+    path = tmp_path / "stack.yaml"
+    path.write_text(yaml.safe_dump({"cad": CAD_STACK["cad"]}))
+    spec = stack.load(path)
+    cad = stack.fetch(spec, tmp_path / "inputs", export=fake_brick(tmp_path))
+    world = next(v for v in ET.fromstring(stack.to_gdml(spec, cad)).iter("volume")
+                 if v.get("name") == "World")
+    assert [p.get("name") for p in world.iter("physvol")] == ["plate_pv"]
+    assert stack.sensitive(spec, cad) == ["plate"]
+    path.write_text("world_margin_mm: 10\n")
+    with pytest.raises(stack.StackError, match="no layers or cad"):
+        stack.load(path)
+
+
 def test_cad_part_must_be_pinned_and_match_its_pin(tmp_path):
     from factory.modules import stack
 

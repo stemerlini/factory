@@ -418,6 +418,9 @@ The particle-telescope and plasma-thruster trees live on as test fixtures.
      (factory-3): a rectangular aperture is a Brick part. A new request kind `design` is a job
      for a tool that makes things (another collimator, a parameter sweep): like `data` it
      needs no branch or pull request, and what comes back is a list of pinned refs.
+   - 2026-11-16: a stack may be `cad:` parts alone (factory-4): `layers` is optional once a
+     part places the geometry, so a head drawn entirely in Brick needs no dummy vacuum layer.
+     A stack with neither is still refused.
 5. **Baselines** — lock/unlock, tags, frozen reports, change impact on children.
 6. **Electronics** — ngspice studies (metrics from `.meas`), KiCad ERC/DRC, BOM + Gerbers.
 7. **Mechanics** — FreeCAD/build123d, STEP export, FEA (CalculiX/Elmer), drawings.

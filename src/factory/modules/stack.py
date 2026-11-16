@@ -23,6 +23,9 @@ volumes are merged into the world at ``position_mm`` (the origin of the part's f
 by ``rotation_deg`` as in GDML's ``<rotation>`` (Geant4 rotates the frame: a part turned +30
 degrees about z is ``[0, 0, -30]``). The ref must carry its pin; ``sensitive: true`` records
 every volume of the part.
+
+``layers`` is optional when ``cad`` places the geometry: a head drawn entirely in Brick is a
+stack of ``cad`` parts alone.
 """
 
 from __future__ import annotations
@@ -56,8 +59,8 @@ def _length_mm(entry: dict, key: str, required: bool = True) -> float | None:
 
 def load(path: Path) -> dict:
     data = yaml.safe_load(Path(path).read_text()) or {}
-    if not data.get("layers"):
-        raise StackError(f"{path}: no layers")
+    if not data.get("layers") and not data.get("cad"):
+        raise StackError(f"{path}: no layers or cad")
     return data
 
 
@@ -152,7 +155,7 @@ def read_cad(path: Path) -> list[Cad]:
 def sensitive(stack: dict, cad: list[Cad] = ()) -> list[str]:
     """The stack's layers, and the volumes of ``sensitive`` cad parts: the volumes whose
     deposits are recorded by default."""
-    return [str(layer["name"]) for layer in stack["layers"]] + [
+    return [str(layer["name"]) for layer in stack.get("layers") or []] + [
         v for c in cad if c.sensitive for v in c.volumes]
 
 
@@ -161,7 +164,7 @@ def placements(stack: dict) -> list[dict]:
     (a box's ``rmax`` is its half-width), z0, length``, all in mm, z0 the front face."""
     out: list[dict] = []
     z = 0.0
-    for layer in stack["layers"]:
+    for layer in stack.get("layers") or []:
         name = str(layer["name"])
         z += float(layer.get("gap_mm", 0.0))
         t = _length_mm(layer, "thickness")
