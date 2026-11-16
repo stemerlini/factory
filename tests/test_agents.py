@@ -51,6 +51,25 @@ def test_agent_session_follows_the_policy_and_resumes(make):
     asyncio.run(go())
 
 
+def test_model_follows_the_element_kind_and_falls_back(make):
+    p = make()
+    config.save({"agent": {"model": "opus", "fallback": "opus",
+                           "models": {"electronics": "broke-gpt"}},
+                 "agents": {"fake": {"command": [sys.executable, str(FAKE)]}}})
+
+    async def said(element):
+        one = live.Live(p, element, "fake")
+        await one.start()
+        await one.send("hi")
+        await one.close()
+        return [e.text for e in one.entries if e.kind in ("agent", "error")], one.model
+
+    assert asyncio.run(said("")) == (["model opus"], "opus")
+    texts, model = asyncio.run(said("fee"))
+    assert model == "opus" and texts[-1] == "model opus"
+    assert "broke-gpt" in texts[0] and "opus" in texts[0]
+
+
 OPTIONS = [{"optionId": "yes", "kind": "allow_once"}, {"optionId": "no", "kind": "reject_once"}]
 
 
