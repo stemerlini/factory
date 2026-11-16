@@ -162,7 +162,8 @@ cad:                                      # parts from Brick, pinned; merged int
 A `cad` part is exported as GDML by `brick export` (hash-checked; an unpinned ref is refused)
 and its volumes placed with the origin of its frame at `position_mm`. Volume names are in
 `brick show REF --json` (`selected.volumes`): use them in `sensitive`, or set `sensitive: true`.
-The run writes `cad.json` (refs and pins).
+The run writes `cad.json` (refs and pins). `layers` is optional when `cad` parts make the whole
+geometry (a head drawn entirely in Brick): no placeholder layer is needed.
 
 Output `events.csv`: `species,E_MeV,<volume>_keV…,back,escape`, one row per primary. `back` = the
 primary last left the stack towards -z; `escape` = towards +z or sideways; both 0 = stopped

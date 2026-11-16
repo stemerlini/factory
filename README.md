@@ -225,8 +225,9 @@ isotropic or cos-law source, or the IRENE `gps_*.mac`). A stack lists `layers` f
 (`name`, `material`, `thickness_nm|um|mm`, `radius_mm` or `half_mm`, optional `gap_mm`), optional
 `materials` (`{density_g_cm3, formula}`), `volumes` (tubes for housings and collimators) and
 `cad` (parts from [Brick](https://github.com/stemerlini/brick), the 3D parts library; see
-below); the front face is at z = 0. Parameters: `physics` (any Geant4 reference list, default
-FTFP_BERT_EMZ), `sensitive` (volumes to record; default the layers, or everything in a GDML
+below); the front face is at z = 0. `layers` may be left out when `cad` parts make the whole
+geometry. Parameters: `physics` (any Geant4 reference list, default
+FTFP_BERT_EMZ), `sensitive` (volumes to record; default the layers and `sensitive: true` cad parts, or everything in a GDML
 world), `threads`. `events.csv` has one row per event: `species, E_MeV, <volume>_keV…, back,
 escape` (the primary last left the stack towards -z, or towards +z/sideways).
 
