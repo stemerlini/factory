@@ -128,15 +128,29 @@ def fingerprint(project: Project, study: Study) -> str:
     return h.hexdigest()[:16]
 
 
+_digests: dict[Path, tuple[tuple[int, int], bytes]] = {}
+
+
+def _digest(path: Path) -> bytes:
+    """A file's SHA-256, computed again only when its size or mtime changes: the TUI
+    fingerprints every study on each refresh, and inputs can be large."""
+    st = path.stat()
+    stamp = (st.st_mtime_ns, st.st_size)
+    hit = _digests.get(path)
+    if hit is None or hit[0] != stamp:
+        hit = _digests[path] = (stamp, hashlib.sha256(path.read_bytes()).digest())
+    return hit[1]
+
+
 def hash_tree(path: Path, skip: tuple[str, ...] = ()) -> str:
     h = hashlib.sha256()
     if path.is_file():
-        h.update(path.read_bytes())
+        h.update(_digest(path))
     elif path.is_dir():
         for f in sorted(path.rglob("*")):
             rel = f.relative_to(path)
             if f.is_file() and not (rel.parts[0] in skip or "__pycache__" in rel.parts):
-                h.update(str(rel).encode() + b"\0" + f.read_bytes() + b"\0")
+                h.update(str(rel).encode() + b"\0" + _digest(f) + b"\0")
     else:
         h.update(b"missing")
     return h.hexdigest()

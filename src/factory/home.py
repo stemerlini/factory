@@ -49,6 +49,7 @@ class Home:
     progress: float = 0.0
     recent: list[journal.Event] = field(default_factory=list)
     streak: int = 0
+    events: list[journal.Event] = field(default_factory=list)  # the whole journal
 
 
 def build(project: Project, elements: list[Element],
@@ -92,7 +93,7 @@ def build(project: Project, elements: list[Element],
         done += sum(g.status == gates.DONE for g in gs)
         total += sum(g.status != gates.SKIPPED for g in gs)
     h.progress = done / total if total else 0.0
-    found = journal.events(project)
+    found = h.events = journal.events(project)
     h.recent = found[:recent]
     h.streak = journal.streak(found)
     return h

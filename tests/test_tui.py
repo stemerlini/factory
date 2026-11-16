@@ -144,6 +144,32 @@ async def test_agent_pane_asks_and_remembers(make):
         assert app.clipboard.strip() == "reject-once allow-once allow-once allow-once"
 
 
+async def test_long_transcript_mounts_only_recent_blocks():
+    from textual.app import App
+    from textual.widgets import Static
+
+    from factory.tui.agentpane import Transcript
+
+    class Host(App):
+        def compose(self):
+            yield Transcript()
+
+    blocks = [f"reply {i}" for i in range(100)]
+    async with Host().run_test() as pilot:
+        t = pilot.app.query_one(Transcript)
+        t.show(blocks)
+        await pilot.pause()
+        assert len(t.children) == Transcript.LIMIT + 1  # + the "earlier" line
+        first = t.children[1]
+        t.show(blocks + ["reply 100"])  # a new reply does not remount the window
+        await pilot.pause()
+        assert t.children[1] is first
+        t.show(blocks + ["reply 100"])
+        await pilot.click(Static)  # the "earlier" line shows more of the history
+        await pilot.pause()
+        assert len(t.children) == 2 * Transcript.LIMIT + 1
+
+
 def test_editor_command_splits_flags(monkeypatch, tmp_path):
     from factory.tui.app import editor_command
 

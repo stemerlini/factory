@@ -72,9 +72,10 @@ def changes(project: Project) -> list[Change]:
 
 
 def owner(project: Project, elements: list[Element], path: str) -> str:
-    full = project.root / path
+    path = path.rstrip("/")
     for e in elements:  # deepest first
-        if full == e.dir or e.dir in full.parents:
+        rel = e.dir.relative_to(project.root).as_posix() if e.dir != project.root else ""
+        if not rel or path == rel or path.startswith(rel + "/"):
             return e.path
     return ""
 

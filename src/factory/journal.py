@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 from . import decisions, gates, review, runs
 from .project import Project, ProjectError
@@ -77,7 +78,16 @@ def _recorded(project: Project) -> list[Event]:
     return found
 
 
+_history: dict[tuple[Path, str], list[Event]] = {}
+
+
 def _commits(project: Project, elements) -> list[Event]:
+    """The last 300 commits as events. History only changes when HEAD moves (or the tree is
+    re-cut into elements), so the parse is kept per HEAD."""
+    head = project.git("rev-parse", "-q", "--verify", "HEAD") or ""
+    key = (project.root, head + "|" + ",".join(e.path for e in elements))
+    if key in _history:
+        return list(_history[key])
     out = project.git("log", "-n", "300", "--name-only", "--format=\x1e%aI\x1f%h\x1f%s")
     found = []
     for chunk in (out or "").split("\x1e"):
@@ -89,7 +99,8 @@ def _commits(project: Project, elements) -> list[Event]:
         owners = {review.owner(project, elements, f) for f in files.splitlines() if f}
         found.append(Event(when, "approve", subject,
                            owners.pop() if len(owners) == 1 else "", short))
-    return found
+    _history[key] = found
+    return list(found)
 
 
 def _locks(project: Project) -> list[Event]:
