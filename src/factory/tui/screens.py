@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
+import sys
 import textwrap
 import time
 import tomllib
@@ -34,12 +37,32 @@ from ..project import MANIFEST, Project, ProjectError, create, slug, templates, 
 NEW = "__new__"
 
 
+APP_ID = "org.omarchy.factory"
+
+
+def window_argv(root: Path) -> list[str]:
+    """Factory on ``root`` in a window of its own, beside this one."""
+    exe = [shutil.which("factory")] if shutil.which("factory") else [sys.executable, "-m",
+                                                                      "factory"]
+    inner = [*exe, "tui", "-C", str(root)]
+    if shutil.which("omarchy-launch-tui"):
+        return ["omarchy-launch-tui", f"--app-id={APP_ID}", *inner]
+    return ["xdg-terminal-exec", f"--app-id={APP_ID}", "-e", *inner]
+
+
+def launch(argv: list[str]) -> None:
+    subprocess.Popen(argv, start_new_session=True, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL)
+
+
 class ProjectPicker(ModalScreen[Path | None]):
-    BINDINGS = [Binding("escape", "dismiss(None)", "Close")]
+    BINDINGS = [Binding("escape", "dismiss(None)", "Close"),
+                Binding("w", "new_window", "Open in a new window")]
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
             yield Label("Open a project", classes="dialog-title")
+            yield Label(Text("enter opens here · w opens in a new window", "dim"))
             options = []
             for root in config.known_projects():
                 try:
@@ -63,6 +86,17 @@ class ProjectPicker(ModalScreen[Path | None]):
             self.app.push_screen(NewProjectScreen(), created)
         else:
             self.dismiss(Path(event.option.id))
+
+    def action_new_window(self) -> None:
+        option = self.query_one(OptionList).highlighted_option
+        if option is None or option.id == NEW:
+            return
+        try:
+            launch(window_argv(Path(option.id)))
+        except OSError as e:
+            self.notify(f"Could not open a new window: {e}", severity="error")
+            return
+        self.notify(f"Opening {Path(option.id).name} in a new window")
 
 
 class NewProjectScreen(ModalScreen[Path | None]):
@@ -419,7 +453,7 @@ change marks studies, and what they verify, **stale**. Lock baselines an element
 | `y` / `x` / `c` | Review: accept / reject / comment on the file (`Y` accepts the rest) |
 | `S` | Review: submit — commit accepted, discard rejected, send comments to the agent |
 | `enter` | answer the selected decision (Review tab) |
-| `ctrl+o` / `ctrl+r` | switch project / reload |
+| `ctrl+o` / `ctrl+r` | switch project (`w` there: in a new window) / reload |
 
 Gates: ✓ done · ◐ in progress · ○ to do · – skipped · ● unlocked by a change.
 Studies: ✓ up to date · ● stale · ○ never ran · ⟳ running · ✗ failed.
