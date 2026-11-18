@@ -322,3 +322,20 @@ async def test_requests_go_to_the_tools_herdr_workspace(make, monkeypatch):
     assert calls[3][:3] == ("agent", "start", "req-factory-1")
     assert "--close factory-1 --branch" in calls[4][3] and "AGENTS.md" in calls[4][3]
     assert requests.get(r.id).status == requests.SENT
+
+
+async def test_open_another_project_in_a_new_window(make, monkeypatch):
+    from factory.tui import screens
+
+    p = make()
+    launched = []
+    monkeypatch.setattr(screens, "launch", launched.append)
+    app = FactoryApp(p.root)
+    async with app.run_test(size=(150, 44)) as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+o")
+        await pilot.pause()
+        await pilot.press("w")
+        await pilot.pause()
+        assert launched and launched[0][-2:] == ["-C", str(p.root)]
+        assert app.project.root == p.root and isinstance(app.screen, screens.ProjectPicker)

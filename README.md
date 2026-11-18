@@ -71,6 +71,12 @@ factory gates fee            # the gates with their checklists
 factory agent fee -g analyse # an agent session on that gate (--print shows the brief)
 ```
 
+## Several projects at once
+
+`Ctrl+O` lists your projects: `enter` opens one here, `w` opens it in a new window beside
+this one. Right-click Factory in the apps menu for *New Window* too (launching it normally
+focuses the window already open).
+
 ## New projects
 
 `Ctrl+O` → *New project from a template…* asks for a name, **the idea**, a template and a
