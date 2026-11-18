@@ -234,8 +234,12 @@ isotropic or cos-law source, or the IRENE `gps_*.mac`). A stack lists `layers` f
 below); the front face is at z = 0. `layers` may be left out when `cad` parts make the whole
 geometry. Parameters: `physics` (any Geant4 reference list, default
 FTFP_BERT_EMZ), `sensitive` (volumes to record; default the layers and `sensitive: true` cad parts, or everything in a GDML
-world), `threads` (default all cores; events are written in order and seeded by the master,
-so `events.csv` is the same whatever the count). `events.csv` has one row per event: `species, E_MeV, <volume>_keV…, back,
+world), `threads` (default all cores for `factory-g4`; set a positive count to limit workers).
+Rows are ordered by event ID within each `/run/beamOn`. With the same inputs, initial seeds
+and Geant4's default per-event seeding, changing the worker count preserves both CSVs.
+Macros that seed by worker or batch instead can change the results. If events finish far
+out of order, `factory-g4` uses temporary disk space and merges the remaining rows at run end.
+`events.csv` has one row per event: `species, E_MeV, <volume>_keV…, back,
 escape` (the primary last left the stack towards -z, or towards +z/sideways).
 
 A `cad` entry, `{name, ref, position_mm, rotation_deg, sensitive}`, places a Brick part in the

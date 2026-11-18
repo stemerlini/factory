@@ -426,6 +426,9 @@ Requirements (`req/`) carry criteria on metrics; **studies** run module tasks an
 **runs** whose metrics pass or fail them; derived requirements (`parent:`) roll up. A
 change marks studies, and what they verify, **stale**. Lock baselines an element (git tag).
 
+Geant4 studies: `factory-g4` uses all cores unless `threads` is set. Keep default per-event
+seeding to reproduce the same results with a different worker count.
+
 | Key | |
 |---|---|
 | `1`…`9` | Home, Gates, Requirements, Architecture, Studies, Files, Agent, Review, Journal |
