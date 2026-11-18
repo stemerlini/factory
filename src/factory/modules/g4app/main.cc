@@ -6,8 +6,11 @@
 //   back   = the primary last left the stack into the world moving towards -z
 //   escape = the primary last left the stack into the world moving towards +z or sideways
 // Both 0 = the primary stopped inside the stack.
+// -t N worker threads (default: all cores). Events are written in event order, and each event's
+// random seeds come from the master, so the files do not depend on N.
 // --tracks N also writes tracks.csv (event,track,parent,particle,x,y,z in mm) for the first N
 // events, for the 3D scene.
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -16,6 +19,7 @@
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "G4Event.hh"
@@ -30,7 +34,9 @@
 #include "G4Step.hh"
 #include "G4SystemOfUnits.hh"
 #include "G4UImanager.hh"
+#include "G4Run.hh"
 #include "G4UserEventAction.hh"
+#include "G4UserRunAction.hh"
 #include "G4UserSteppingAction.hh"
 #include "G4VUserActionInitialization.hh"
 #include "G4VUserDetectorConstruction.hh"
@@ -42,6 +48,20 @@ std::map<const G4LogicalVolume*, int> gIndex;          // read-only once the run
 std::ofstream gOut, gTracks;
 int gNTracks = 0;
 std::mutex gMutex;
+// Rows wait here until every earlier event of the run is written, so the files are in event
+// order whatever the number of threads.
+std::map<int, std::pair<std::string, std::string>> gPending;
+int gNext = 0;
+
+void writePending(bool all) {  // gMutex held
+  while (!gPending.empty() && (all || gPending.begin()->first == gNext)) {
+    auto it = gPending.begin();
+    gOut << it->second.first;
+    if (gNTracks > 0) gTracks << it->second.second;
+    gNext = it->first + 1;
+    gPending.erase(it);
+  }
+}
 
 class Detector : public G4VUserDetectorConstruction {
  public:
@@ -139,19 +159,31 @@ class Evt : public G4UserEventAction {
     for (double d : d_->dep) row << ',' << d / keV;
     row << ',' << int(d_->exit == 1) << ',' << int(d_->exit == 2) << '\n';
     std::lock_guard<std::mutex> lock(gMutex);
-    gOut << row.str();
-    if (gNTracks > 0) gTracks << d_->tracks;
+    gPending[ev->GetEventID()] = {row.str(), d_->tracks};
+    writePending(false);
   }
  private:
   EventData* d_;
 };
 
+class Run : public G4UserRunAction {
+ public:
+  void EndOfRunAction(const G4Run*) override {
+    if (!IsMaster()) return;
+    std::lock_guard<std::mutex> lock(gMutex);
+    writePending(true);
+    gNext = 0;  // event numbers restart at each /run/beamOn
+  }
+};
+
 class Actions : public G4VUserActionInitialization {
  public:
+  void BuildForMaster() const override { SetUserAction(new Run); }
   void Build() const override {
     auto* d = new EventData;  // one per thread; lives for the process
     SetUserAction(new Gen);
     SetUserAction(new Evt(d));
+    SetUserAction(new Run);
     SetUserAction(new Step(d));
   }
 };
@@ -166,7 +198,7 @@ std::vector<std::string> split(const std::string& s) {
 
 int main(int argc, char** argv) {
   std::string gdml, physics = "FTFP_BERT_EMZ", macro, sensitive;
-  int threads = 0;
+  int threads = std::max(1u, std::thread::hardware_concurrency());
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     auto next = [&]() -> std::string {
@@ -183,9 +215,9 @@ int main(int argc, char** argv) {
   }
   if (gdml.empty()) { std::cerr << "usage: factory-g4 --gdml geometry.gdml [--physics LIST] [--sensitive A,B] [--tracks N] [-t N] macro.mac\n"; return 2; }
 
-  auto rm = std::unique_ptr<G4RunManager>(G4RunManagerFactory::CreateRunManager(
-      threads > 0 ? G4RunManagerType::MT : G4RunManagerType::Serial));
-  if (threads > 0) rm->SetNumberOfThreads(threads);
+  if (threads < 1) { std::cerr << "factory-g4: -t needs at least 1 thread\n"; return 2; }
+  auto rm = std::unique_ptr<G4RunManager>(G4RunManagerFactory::CreateRunManager(G4RunManagerType::MT));
+  rm->SetNumberOfThreads(threads);
   G4PhysListFactory factory;
   if (!factory.IsReferencePhysList(physics)) { std::cerr << "factory-g4: unknown physics list " << physics << "\n"; return 2; }
   rm->SetUserInitialization(new Detector(gdml, split(sensitive)));

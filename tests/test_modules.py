@@ -209,6 +209,20 @@ def test_geant4_run_command_from_a_stack(make):
     assert argv[-3:] == [str(study.dir / "m.mac"), "-t", "4"]
 
 
+def test_geant4_threads_default_to_all_cores(make, monkeypatch):
+    from factory.modules.api import RunContext
+    from factory.modules.geant4 import run_command
+
+    monkeypatch.setattr("os.cpu_count", lambda: 12)
+    p = make()
+    (p.root / "g.gdml").write_text("<gdml/>")
+    ctx = RunContext(p, p.study("S001"), "r1", p.root / "out", {
+        "app": "factory-g4", "macro": "m.mac", "physics": "QBBC", "sensitive": "", "threads": None,
+        "tracks": 0,
+    }, {"geometry": p.root / "g.gdml"})
+    assert run_command(ctx).argv[-2:] == ["-t", "12"]
+
+
 def test_scene_is_valid_vtk_with_outlines_and_tracks(tmp_path):
     from factory.modules import scene
 

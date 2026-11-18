@@ -138,7 +138,7 @@ task = "geant4.run"
 [params]
 macro = "run.mac"            # GPS source (e.g. isotropic, /gps/ang/type cos) and /run/beamOn
 physics = "FTFP_BERT_EMZ"    # any Geant4 reference physics list
-threads = 8
+threads = 8                  # default: all cores; the output does not depend on it
 # sensitive = "D1,D2"        # volumes to record; default: the stack's layers
 [inputs]
 stack = "geometry/stack.yaml"   # or a .gdml file

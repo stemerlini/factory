@@ -42,8 +42,9 @@ def run_command(ctx: RunContext) -> Command:
         if names:
             argv += ["--sensitive", ",".join(names)]
     argv.append(str(macro))
-    if ctx.params.get("threads"):
-        argv += ["-t", str(ctx.params["threads"])]
+    threads = ctx.params.get("threads") or (os.cpu_count() if geometry is not None else None)
+    if threads:
+        argv += ["-t", str(threads)]
     return Command(argv, env={"FACTORY_OUTPUTS": str(ctx.outputs_dir)}, cwd=ctx.outputs_dir)
 
 
@@ -102,7 +103,8 @@ module = Module(
             params=(
                 Param("app", str, "factory-g4", help="Geant4 executable"),
                 Param("macro", str, "run.mac", help="macro, relative to the study folder"),
-                Param("threads", int, None, help="worker threads"),
+                Param("threads", int, None, help="worker threads (factory-g4: default all cores; "
+                      "the output does not depend on it)"),
                 Param("physics", str, "FTFP_BERT_EMZ", help="reference physics list (factory-g4)"),
                 Param("tracks", int, 20, help="events whose tracks are drawn in scene.vtk "
                       "(0 = none; factory-g4 with a stack or GDML)"),
