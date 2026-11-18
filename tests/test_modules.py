@@ -208,6 +208,49 @@ def test_geant4_run_command_from_a_stack(make):
                         "--tracks", "5", "--sensitive", "Kap,D1"]
     assert argv[-3:] == [str(study.dir / "m.mac"), "-t", "4"]
 
+    ctx.params.update(app="custom-g4", threads=None)
+    assert "-t" not in run_command(ctx).argv
+
+
+def test_g4app_orders_events_and_tracks_across_runs(tmp_path):
+    import os
+    import subprocess
+    from itertools import groupby
+    from pathlib import Path
+
+    from factory.modules import stack
+    from factory.modules.geant4 import TOOLCHAIN
+
+    prefix = TOOLCHAIN.prefix()
+    if not prefix:
+        pytest.skip("requires the Geant4 toolchain")
+    build = tmp_path / "build"
+    subprocess.run(["cmake", "-S", Path(stack.__file__).parent / "g4app", "-B", build,
+                    f"-DCMAKE_PREFIX_PATH={prefix}"], check=True)
+    subprocess.run(["cmake", "--build", build], check=True)
+    env = {**os.environ, **TOOLCHAIN.environment()}
+    geometry = tmp_path / "g.gdml"
+    geometry.write_text(stack.to_gdml({"layers": [
+        {"name": "D1", "material": "G4_Si", "thickness_um": 300, "radius_mm": 5},
+    ]}))
+    macro = tmp_path / "run.mac"
+    macro.write_text("/gps/particle e-\n/gps/pos/centre 0 0 -1 mm\n/gps/direction 0 0 1\n"
+                     "/run/eventModulo 1500 0\n/gps/energy 2 MeV\n/run/beamOn 6000\n"
+                     "/gps/energy 1 MeV\n/run/beamOn 300\n")
+    results = []
+    for workers in (1, 4):
+        out = tmp_path / str(workers)
+        out.mkdir()
+        subprocess.run([build / "factory-g4", "--gdml", geometry, "--tracks", "3",
+                        "-t", str(workers), macro], cwd=out, check=True, timeout=90,
+                       env={**env, "FACTORY_OUTPUTS": str(out)})
+        results.append(tuple((out / f).read_bytes() for f in ("events.csv", "tracks.csv")))
+    assert results[0] == results[1]
+    events, tracks = results[0]
+    assert [r.split(b",")[1] for r in events.splitlines()[1:]] == [b"2"] * 6000 + [b"1"] * 300
+    assert [key for key, _ in groupby(r.split(b",")[0] for r in tracks.splitlines()[1:])] == [
+        b"0", b"1", b"2", b"0", b"1", b"2"]
+
 
 def test_scene_is_valid_vtk_with_outlines_and_tracks(tmp_path):
     from factory.modules import scene

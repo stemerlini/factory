@@ -6,8 +6,11 @@
 //   back   = the primary last left the stack into the world moving towards -z
 //   escape = the primary last left the stack into the world moving towards +z or sideways
 // Both 0 = the primary stopped inside the stack.
+// -t N worker threads (default: all cores). Rows are ordered by event ID within each run.
 // --tracks N also writes tracks.csv (event,track,parent,particle,x,y,z in mm) for the first N
 // events, for the 3D scene.
+#include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -15,7 +18,9 @@
 #include <memory>
 #include <mutex>
 #include <sstream>
+#include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "G4Event.hh"
@@ -29,8 +34,11 @@
 #include "G4RunManagerFactory.hh"
 #include "G4Step.hh"
 #include "G4SystemOfUnits.hh"
+#include "G4Threading.hh"
 #include "G4UImanager.hh"
+#include "G4Run.hh"
 #include "G4UserEventAction.hh"
+#include "G4UserRunAction.hh"
 #include "G4UserSteppingAction.hh"
 #include "G4VUserActionInitialization.hh"
 #include "G4VUserDetectorConstruction.hh"
@@ -42,6 +50,91 @@ std::map<const G4LogicalVolume*, int> gIndex;          // read-only once the run
 std::ofstream gOut, gTracks;
 int gNTracks = 0;
 std::mutex gMutex;
+using Rows = std::pair<std::string, std::string>;
+std::map<int, Rows> gPending;
+size_t gPendingBytes = 0;
+int gNext = 0;
+
+// Geant4 assigns increasing event IDs to each worker. On overflow, each worker therefore
+// produces one sorted stream; the master needs only its next ID to merge it at run end.
+using File = std::unique_ptr<FILE, int (*)(FILE*)>;
+std::map<int, File> gSpills;
+
+void spill(int stream, int id, const Rows& rows) {
+  auto [it, inserted] = gSpills.try_emplace(stream, nullptr, std::fclose);
+  if (inserted) it->second.reset(std::tmpfile());
+  auto* f = it->second.get();
+  if (!f || std::fwrite(&id, sizeof(id), 1, f) != 1)
+    throw std::runtime_error("factory-g4: cannot spool event ID");
+  for (auto* s : {&rows.first, &rows.second}) {
+    size_t size = s->size();
+    if (std::fwrite(&size, sizeof(size), 1, f) != 1 || std::fwrite(s->data(), 1, size, f) != size)
+      throw std::runtime_error("factory-g4: cannot spool event data");
+  }
+}
+
+void submit(int id, Rows rows) {
+  std::lock_guard<std::mutex> lock(gMutex);
+  size_t bytes = rows.first.size() + rows.second.size();
+  if (!gSpills.empty() || (id != gNext &&
+      (gPending.size() >= 1024 || gPendingBytes + bytes > 1024 * 1024))) {
+    for (auto& [key, pending] : gPending) spill(-1, key, pending);
+    gPending.clear();
+    spill(G4Threading::G4GetThreadId(), id, rows);
+  } else if (id != gNext) {
+    gPending.emplace(id, std::move(rows));
+    gPendingBytes += bytes;
+  } else {
+    gOut << rows.first;
+    if (gNTracks > 0) gTracks << rows.second;
+    ++gNext;
+    while (!gPending.empty() && gPending.begin()->first == gNext) {
+      auto& [event, tracks] = gPending.begin()->second;
+      gOut << event;
+      if (gNTracks > 0) gTracks << tracks;
+      gPendingBytes -= event.size() + tracks.size();
+      gPending.erase(gPending.begin());
+      ++gNext;
+    }
+  }
+}
+
+void finishOutput() {
+  for (auto& [id, rows] : gPending) {
+    gOut << rows.first;
+    if (gNTracks > 0) gTracks << rows.second;
+  }
+  gPending.clear();
+  std::map<int, FILE*> heads;
+  auto advance = [&](FILE* f) {
+    int id;
+    if (std::fread(&id, sizeof(id), 1, f) == 1) heads.emplace(id, f);
+    else if (std::ferror(f)) throw std::runtime_error("factory-g4: cannot read spooled event ID");
+  };
+  for (auto& [stream, file] : gSpills) {
+    if (std::fseek(file.get(), 0, SEEK_SET)) throw std::runtime_error("factory-g4: cannot rewind spool");
+    advance(file.get());
+  }
+  while (!heads.empty()) {
+    auto* f = heads.begin()->second;
+    heads.erase(heads.begin());
+    for (auto* out : {&gOut, &gTracks}) {
+      size_t size;
+      if (std::fread(&size, sizeof(size), 1, f) != 1) throw std::runtime_error("factory-g4: truncated spool");
+      char buf[8192];
+      while (size) {
+        auto n = std::min(sizeof(buf), size);
+        if (std::fread(buf, 1, n, f) != n) throw std::runtime_error("factory-g4: truncated spool");
+        out->write(buf, n);
+        size -= n;
+      }
+    }
+    advance(f);
+  }
+  gSpills.clear();
+  gPendingBytes = 0;
+  gNext = 0;
+}
 
 class Detector : public G4VUserDetectorConstruction {
  public:
@@ -138,20 +231,29 @@ class Evt : public G4UserEventAction {
     row << p->GetParticleDefinition()->GetParticleName() << ',' << p->GetKineticEnergy() / MeV;
     for (double d : d_->dep) row << ',' << d / keV;
     row << ',' << int(d_->exit == 1) << ',' << int(d_->exit == 2) << '\n';
-    std::lock_guard<std::mutex> lock(gMutex);
-    gOut << row.str();
-    if (gNTracks > 0) gTracks << d_->tracks;
+    submit(ev->GetEventID(), {row.str(), std::move(d_->tracks)});
   }
  private:
   EventData* d_;
 };
 
+class Run : public G4UserRunAction {
+ public:
+  void EndOfRunAction(const G4Run*) override {
+    if (!IsMaster()) return;
+    std::lock_guard<std::mutex> lock(gMutex);
+    finishOutput();
+  }
+};
+
 class Actions : public G4VUserActionInitialization {
  public:
+  void BuildForMaster() const override { SetUserAction(new Run); }
   void Build() const override {
     auto* d = new EventData;  // one per thread; lives for the process
     SetUserAction(new Gen);
     SetUserAction(new Evt(d));
+    SetUserAction(new Run);
     SetUserAction(new Step(d));
   }
 };
@@ -166,7 +268,7 @@ std::vector<std::string> split(const std::string& s) {
 
 int main(int argc, char** argv) {
   std::string gdml, physics = "FTFP_BERT_EMZ", macro, sensitive;
-  int threads = 0;
+  int threads = std::max(1u, std::thread::hardware_concurrency());
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     auto next = [&]() -> std::string {
@@ -183,9 +285,9 @@ int main(int argc, char** argv) {
   }
   if (gdml.empty()) { std::cerr << "usage: factory-g4 --gdml geometry.gdml [--physics LIST] [--sensitive A,B] [--tracks N] [-t N] macro.mac\n"; return 2; }
 
-  auto rm = std::unique_ptr<G4RunManager>(G4RunManagerFactory::CreateRunManager(
-      threads > 0 ? G4RunManagerType::MT : G4RunManagerType::Serial));
-  if (threads > 0) rm->SetNumberOfThreads(threads);
+  if (threads < 1) { std::cerr << "factory-g4: -t needs at least 1 thread\n"; return 2; }
+  auto rm = std::unique_ptr<G4RunManager>(G4RunManagerFactory::CreateRunManager(G4RunManagerType::MT));
+  rm->SetNumberOfThreads(threads);
   G4PhysListFactory factory;
   if (!factory.IsReferencePhysList(physics)) { std::cerr << "factory-g4: unknown physics list " << physics << "\n"; return 2; }
   rm->SetUserInitialization(new Detector(gdml, split(sensitive)));
@@ -202,5 +304,9 @@ int main(int argc, char** argv) {
   if (!macro.empty()) G4UImanager::GetUIpointer()->ApplyCommand("/control/execute " + macro);
   gOut.flush();
   gTracks.flush();
+  if (!gOut || (gNTracks > 0 && !gTracks)) {
+    std::cerr << "factory-g4: failed to write CSV output\n";
+    return 1;
+  }
   return 0;
 }

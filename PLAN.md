@@ -421,6 +421,14 @@ The particle-telescope and plasma-thruster trees live on as test fixtures.
    - 2026-11-16: a stack may be `cad:` parts alone (factory-4): `layers` is optional once a
      part places the geometry, so a head drawn entirely in Brick needs no dummy vacuum layer.
      A stack with neither is still refused.
+   - 2026-11-18: `factory-g4` uses MT (`-t`, default all cores). With default per-event seeding
+     its output does not depend on the thread count: rows and tracks are written in event order
+     (checked byte-identical at 1, 4 and 24 threads; 100k 2 MeV
+     e- in 300 um Si: 6.0 s on 1 thread, 1.5 s on 24). First step of factory-6; the GPU (Celeritas/AdePT)
+     evaluation follows separately, validated against this CPU result.
+   - 2026-11-19: Only `factory-g4` chooses a default worker count. Bound its reorder buffer to
+     1024 events and 1 MiB of row data; beyond either limit, merge temporary sorted streams at
+     run end rather than holding a study's worth of completed events in memory.
 5. **Baselines** — lock/unlock, tags, frozen reports, change impact on children.
 6. **Electronics** — ngspice studies (metrics from `.meas`), KiCad ERC/DRC, BOM + Gerbers.
 7. **Mechanics** — FreeCAD/build123d, STEP export, FEA (CalculiX/Elmer), drawings.
