@@ -20,6 +20,36 @@ from .api import Check, Command, FileKind, Module, Param, RunContext, Task, Tool
 TOOLCHAIN = Toolchain("geant4", env_script="bin/geant4.sh", executable="bin/geant4-config")
 
 
+def threads_value(v) -> int | str:
+    """A thread count, or ``auto``."""
+    if str(v).strip().lower() == "auto":
+        return "auto"
+    n = int(v)
+    if n < 1:
+        raise ValueError("threads must be a positive number or 'auto'")
+    return n
+
+
+def _in_flight(ctx: RunContext) -> int:
+    from .. import runs
+
+    return max(1, sum(1 for s in ctx.project.studies()
+                      for r in runs.history(ctx.project, s) if r.status == "running"))
+
+
+def resolve_threads(ctx: RunContext) -> int | None:
+    """Worker threads: the study's ``threads``, else ``[geant4] threads`` of factory.toml, else
+    None (the application's default). ``auto`` = the cores this process may use, divided by the
+    runs in flight."""
+    value = ctx.params.get("threads")
+    if value is None and "threads" in ctx.project.geant4:
+        value = threads_value(ctx.project.geant4["threads"])
+    if value == "auto":
+        cores = len(os.sched_getaffinity(0))
+        value = max(1, cores // _in_flight(ctx))
+    return value
+
+
 def run_command(ctx: RunContext) -> Command:
     app = ctx.params["app"]
     macro = ctx.study.dir / ctx.params["macro"]
@@ -42,8 +72,9 @@ def run_command(ctx: RunContext) -> Command:
         if names:
             argv += ["--sensitive", ",".join(names)]
     argv.append(str(macro))
-    threads = ctx.params.get("threads")
+    threads = resolve_threads(ctx)
     if threads is not None:
+        ctx.params["threads"] = threads  # the run record keeps the count actually used
         argv += ["-t", str(threads)]
     return Command(argv, env={"FACTORY_OUTPUTS": str(ctx.outputs_dir)}, cwd=ctx.outputs_dir)
 
@@ -103,7 +134,9 @@ module = Module(
             params=(
                 Param("app", str, "factory-g4", help="Geant4 executable"),
                 Param("macro", str, "run.mac", help="macro, relative to the study folder"),
-                Param("threads", int, None, help="worker threads (factory-g4: default all cores)"),
+                Param("threads", threads_value, None,
+                      help="worker threads: N or auto (cores / runs in flight); default "
+                      "[geant4] threads in factory.toml, else the app's (factory-g4: all cores)"),
                 Param("physics", str, "FTFP_BERT_EMZ", help="reference physics list (factory-g4)"),
                 Param("tracks", int, 20, help="events whose tracks are drawn in scene.vtk "
                       "(0 = none; factory-g4 with a stack or GDML)"),

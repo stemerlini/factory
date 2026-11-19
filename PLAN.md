@@ -429,6 +429,13 @@ The particle-telescope and plasma-thruster trees live on as test fixtures.
    - 2026-11-19: Only `factory-g4` chooses a default worker count. Bound its reorder buffer to
      1024 events and 1 MiB of row data; beyond either limit, merge temporary sorted streams at
      run end rather than holding a study's worth of completed events in memory.
+   - 2026-11-19: factory-5: `threads` takes `auto` (the cores this process may use divided by
+     the runs of the project in flight, at least 1), and `[geant4] threads` in `factory.toml` is
+     the project default (a study's own `threads` wins). Unset still means the application's
+     default, so existing studies are unchanged. The run record keeps the count used. `auto`
+     counts the runs running when a run starts, so runs started in the same instant may
+     oversubscribe a little. Sharding a macro's beams over runs is not done: it needs seeds per
+     shard and a merge, and `factory-g4` already uses every core for a single run.
 5. **Baselines** — lock/unlock, tags, frozen reports, change impact on children.
 6. **Electronics** — ngspice studies (metrics from `.meas`), KiCad ERC/DRC, BOM + Gerbers.
 7. **Mechanics** — FreeCAD/build123d, STEP export, FEA (CalculiX/Elmer), drawings.
