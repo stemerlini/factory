@@ -234,7 +234,10 @@ isotropic or cos-law source, or the IRENE `gps_*.mac`). A stack lists `layers` f
 below); the front face is at z = 0. `layers` may be left out when `cad` parts make the whole
 geometry. Parameters: `physics` (any Geant4 reference list, default
 FTFP_BERT_EMZ), `sensitive` (volumes to record; default the layers and `sensitive: true` cad parts, or everything in a GDML
-world), `threads` (default all cores for `factory-g4`; set a positive count to limit workers).
+world), `threads` (default all cores for `factory-g4`; a positive count limits workers; `auto`
+divides the cores by the runs in flight, for studies run side by side). A project sets the
+default for its studies in `factory.toml` with `[geant4]` `threads = "auto"` (or a count); a
+study's own `threads` wins. The run record keeps the count used.
 Rows are ordered by event ID within each `/run/beamOn`. With the same inputs, initial seeds
 and Geant4's default per-event seeding, changing the worker count preserves both CSVs.
 Macros that seed by worker or batch instead can change the results. If events finish far

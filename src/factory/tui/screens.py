@@ -426,7 +426,8 @@ Requirements (`req/`) carry criteria on metrics; **studies** run module tasks an
 **runs** whose metrics pass or fail them; derived requirements (`parent:`) roll up. A
 change marks studies, and what they verify, **stale**. Lock baselines an element (git tag).
 
-Geant4 studies: `factory-g4` uses all cores unless `threads` is set. Keep default per-event
+Geant4 studies: `factory-g4` uses all cores unless `threads` is set (N or `auto` = cores / runs
+in flight; project default: `[geant4] threads` in factory.toml). Keep default per-event
 seeding to reproduce the same results with a different worker count.
 
 | Key | |

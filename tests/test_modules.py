@@ -186,7 +186,7 @@ def test_cad_part_must_be_pinned_and_match_its_pin(tmp_path):
         stack.fetch(CAD_STACK, tmp_path, export=fake_brick(tmp_path, pin="other"))
 
 
-def test_geant4_run_command_from_a_stack(make):
+def test_geant4_run_command_from_a_stack(make, monkeypatch):
     import yaml
 
     from factory.modules.api import RunContext
@@ -210,6 +210,15 @@ def test_geant4_run_command_from_a_stack(make):
 
     ctx.params.update(app="custom-g4", threads=None)
     assert "-t" not in run_command(ctx).argv
+
+    # [geant4] threads = "auto" in factory.toml: the cores shared by the runs in flight, recorded
+    monkeypatch.setattr("os.sched_getaffinity", lambda _: set(range(24)))
+    monkeypatch.setattr("factory.modules.geant4._in_flight", lambda _: 4)
+    p.geant4 = {"threads": "auto"}
+    argv = run_command(ctx).argv
+    assert argv[-2:] == ["-t", "6"] and ctx.params["threads"] == 6
+    ctx.params["threads"] = 2  # a study's own value wins
+    assert run_command(ctx).argv[-2:] == ["-t", "2"]
 
 
 def test_g4app_orders_events_and_tracks_across_runs(tmp_path):

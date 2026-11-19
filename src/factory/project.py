@@ -39,6 +39,7 @@ class Project:
     toolchains: dict[str, str] = field(default_factory=dict)
     store_root: Path = DEFAULT_STORE
     vault_folder: str = ""  # folder inside the Obsidian vault; default Projects/<name>
+    geant4: dict = field(default_factory=dict)  # [geant4]: project defaults for geant4.run
     agent: str = ""  # the agent this project works with ([agent] default), else the user's
 
     # --- loading ---------------------------------------------------------------------------
@@ -62,6 +63,7 @@ class Project:
             toolchains=dict(data.get("toolchains", {})),
             store_root=Path(store).expanduser() if store else DEFAULT_STORE,
             vault_folder=data.get("obsidian", {}).get("folder", ""),
+            geant4=dict(data.get("geant4", {})),
             agent=data.get("agent", {}).get("default", ""),
         )
 

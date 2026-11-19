@@ -138,7 +138,8 @@ task = "geant4.run"
 [params]
 macro = "run.mac"            # GPS source (e.g. isotropic, /gps/ang/type cos) and /run/beamOn
 physics = "FTFP_BERT_EMZ"    # any Geant4 reference physics list
-threads = 8                  # factory-g4 defaults to all cores; omit for a custom app's own default
+threads = 8                  # N or "auto" (cores / runs in flight); default: [geant4] threads in
+                             # factory.toml, else factory-g4's all cores / a custom app's own
 # sensitive = "D1,D2"        # volumes to record; default: the stack's layers
 [inputs]
 stack = "geometry/stack.yaml"   # or a .gdml file
