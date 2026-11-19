@@ -436,6 +436,9 @@ The particle-telescope and plasma-thruster trees live on as test fixtures.
      counts the runs running when a run starts, so runs started in the same instant may
      oversubscribe a little. Sharding a macro's beams over runs is not done: it needs seeds per
      shard and a merge, and `factory-g4` already uses every core for a single run.
+   - 2026-11-19: factory-6: keep GPU transport out of `geant4.run`. A successful GPU run can
+     replace tessellated solids with spheres, and aggregate deposits do not establish the
+     event-level EMZ response. See the [side evaluation and reproduction steps](tools/studies/gpu-em.md).
 5. **Baselines** — lock/unlock, tags, frozen reports, change impact on children.
 6. **Electronics** — ngspice studies (metrics from `.meas`), KiCad ERC/DRC, BOM + Gerbers.
 7. **Mechanics** — FreeCAD/build123d, STEP export, FEA (CalculiX/Elmer), drawings.
