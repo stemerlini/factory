@@ -109,6 +109,24 @@ def test_stack_becomes_gdml_with_the_front_face_at_zero():
         stack.to_gdml({"layers": [{"name": "X", "material": "G4_Si", "thickness_um": 1}]})
 
 
+def test_rectangular_layer_is_a_box_with_its_own_x_and_y():
+    import xml.etree.ElementTree as ET
+
+    from factory.modules import stack
+
+    rect = {"name": "D2", "material": "G4_Si", "thickness_um": 300,
+            "half_x_mm": 3.5, "half_y_mm": 5.6, "gap_mm": 1}
+    root = ET.fromstring(stack.to_gdml({"layers": [rect]}))
+    box = next(b for b in root.iter("box") if b.get("name") == "D2_s")
+    assert (float(box.get("x")), float(box.get("y")), float(box.get("z"))) == (7, 11.2, 0.3)
+    assert next(pv for pv in root.iter("physvol") if pv.get("name") == "D2_pv").find(
+        "position").get("z") == "1.15"
+    half_x_only = {k: v for k, v in rect.items() if k != "half_y_mm"}
+    for layer in (half_x_only, {**rect, "half_mm": 5}, {**rect, "radius_mm": 5}):
+        with pytest.raises(stack.StackError):
+            stack.placements({"layers": [layer]})
+
+
 PART_GDML = """<?xml version="1.0"?>
 <gdml><define><position name="plate_v0" unit="mm" x="0" y="0" z="0"/></define>
 <materials/><solids>

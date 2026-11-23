@@ -228,7 +228,7 @@ example the GPS macros `irene.environment` writes).
 application, so a study needs no C++. Give `geant4.run` a geometry as the `stack` input
 (`[inputs] stack = "geometry/stack.yaml"`, or a `.gdml` file) and a GPS macro (`macro`, e.g. an
 isotropic or cos-law source, or the IRENE `gps_*.mac`). A stack lists `layers` front to back
-(`name`, `material`, `thickness_nm|um|mm`, `radius_mm` or `half_mm`, optional `gap_mm`), optional
+(`name`, `material`, `thickness_nm|um|mm`, `radius_mm` (disc), `half_mm` (square) or `half_x_mm` + `half_y_mm` (rectangle), optional `gap_mm`), optional
 `materials` (`{density_g_cm3, formula}`), `volumes` (tubes for housings and collimators) and
 `cad` (parts from [Brick](https://github.com/stemerlini/brick), the 3D parts library; see
 below); the front face is at z = 0. `layers` may be left out when `cad` parts make the whole

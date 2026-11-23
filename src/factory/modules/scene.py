@@ -62,7 +62,7 @@ def outlines(stack: dict) -> list[Line]:
     for v in stacks.placements(stack):
         z0, z1, r = v["z0"], v["z0"] + v["length"], v["rmax"]
         if v["shape"] == "box":
-            c = [(sx * r, sy * r) for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+            c = [(sx * r, sy * v["rmax_y"]) for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
             for z in (z0, z1):
                 lines.append(([(x, y, z) for x, y in c + c[:1]], OUTLINE))
             lines += [([(x, y, z0), (x, y, z1)], OUTLINE) for x, y in c]
