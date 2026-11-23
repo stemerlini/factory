@@ -440,6 +440,9 @@ The particle-telescope and plasma-thruster trees live on as test fixtures.
      exclusive with `radius_mm` / `half_mm`; z stacking and `gap_mm` are unchanged. Detector
      layers stay in `layers` (sensitive by default); Brick remains the home of housings and
      apertures. `factory-g4` is untouched: it reads the GDML.
+   - 2026-11-19: factory-6: keep GPU transport out of `geant4.run`. A successful GPU run can
+     replace tessellated solids with spheres, and aggregate deposits do not establish the
+     event-level EMZ response. See the [side evaluation and reproduction steps](tools/studies/gpu-em.md).
 5. **Baselines** — lock/unlock, tags, frozen reports, change impact on children.
 6. **Electronics** — ngspice studies (metrics from `.meas`), KiCad ERC/DRC, BOM + Gerbers.
 7. **Mechanics** — FreeCAD/build123d, STEP export, FEA (CalculiX/Elmer), drawings.
