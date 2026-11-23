@@ -436,6 +436,10 @@ The particle-telescope and plasma-thruster trees live on as test fixtures.
      counts the runs running when a run starts, so runs started in the same instant may
      oversubscribe a little. Sharding a macro's beams over runs is not done: it needs seeds per
      shard and a merge, and `factory-g4` already uses every core for a single run.
+   - 2026-11-23: factory-7: a layer may be a rectangle, `half_x_mm` + `half_y_mm` (a GDML box),
+     exclusive with `radius_mm` / `half_mm`; z stacking and `gap_mm` are unchanged. Detector
+     layers stay in `layers` (sensitive by default); Brick remains the home of housings and
+     apertures. `factory-g4` is untouched: it reads the GDML.
    - 2026-11-19: factory-6: keep GPU transport out of `geant4.run`. A successful GPU run can
      replace tessellated solids with spheres, and aggregate deposits do not establish the
      event-level EMZ response. See the [side evaluation and reproduction steps](tools/studies/gpu-em.md).

@@ -8,6 +8,7 @@ The stack is described front to back along +z, the front face at z = 0::
     layers:
       - {name: Kapton, material: G4_KAPTON, thickness_um: 50, half_mm: 10}   # square
       - {name: D1, material: G4_Si, thickness_um: 300, radius_mm: 5}         # disc
+      - {name: D3, material: G4_Si, thickness_um: 300, half_x_mm: 3.5, half_y_mm: 5.6}  # rectangle
       - {name: D2, material: G4_Si, thickness_um: 300, radius_mm: 5, gap_mm: 1}
     volumes:                     # housing, collimators: tubes at an absolute z
       - {name: Collimator, material: G4_W, rmin_mm: 5, rmax_mm: 15, z_mm: -10, length_mm: 8}
@@ -160,26 +161,39 @@ def sensitive(stack: dict, cad: list[Cad] = ()) -> list[str]:
 
 
 def placements(stack: dict) -> list[dict]:
-    """Every volume with its shape and place: ``name, material, shape ("tube"|"box"), rmin, rmax
-    (a box's ``rmax`` is its half-width), z0, length``, all in mm, z0 the front face."""
+    """Every volume with its shape and place: ``name, material, shape ("tube"|"box"), rmin, rmax,
+    rmax_y, z0, length``, all in mm, z0 the front face. A box's ``rmax``, ``rmax_y`` are its x, y
+    half-widths (a square has both equal); a tube's ``rmax_y`` is its ``rmax``."""
     out: list[dict] = []
     z = 0.0
     for layer in stack.get("layers") or []:
         name = str(layer["name"])
         z += float(layer.get("gap_mm", 0.0))
         t = _length_mm(layer, "thickness")
-        if "radius_mm" in layer:
-            shape, rmax = "tube", float(layer["radius_mm"])
+        keys = [k for k in ("radius_mm", "half_mm") if k in layer]
+        rect = [k for k in ("half_x_mm", "half_y_mm") if k in layer]
+        if len(rect) == 1:
+            raise StackError(f"{name}: half_x_mm and half_y_mm go together")
+        if len(keys) + bool(rect) > 1:
+            raise StackError(f"{name}: give one of radius_mm, half_mm, or half_x_mm + half_y_mm")
+        if rect:
+            shape, rx, ry = "box", float(layer["half_x_mm"]), float(layer["half_y_mm"])
+        elif "radius_mm" in layer:
+            shape, rx = "tube", float(layer["radius_mm"])
+            ry = rx
         elif "half_mm" in layer:
-            shape, rmax = "box", float(layer["half_mm"])
+            shape, rx = "box", float(layer["half_mm"])
+            ry = rx
         else:
-            raise StackError(f"{name}: needs radius_mm (disc) or half_mm (square)")
+            raise StackError(f"{name}: needs radius_mm (disc), half_mm (square) or "
+                             "half_x_mm + half_y_mm (rectangle)")
         out.append({"name": name, "material": str(layer["material"]), "shape": shape,
-                    "rmin": 0.0, "rmax": rmax, "z0": z, "length": t})
+                    "rmin": 0.0, "rmax": rx, "rmax_y": ry, "z0": z, "length": t})
         z += t
     for vol in stack.get("volumes", []):
         out.append({"name": str(vol["name"]), "material": str(vol["material"]), "shape": "tube",
                     "rmin": float(vol.get("rmin_mm", 0.0)), "rmax": float(vol["rmax_mm"]),
+                    "rmax_y": float(vol["rmax_mm"]),
                     "z0": float(vol["z_mm"]), "length": float(vol["length_mm"])})
     return out
 
@@ -234,10 +248,10 @@ def to_gdml(stack: dict, cad: list[Cad] = ()) -> str:
             raise StackError(f"duplicate volume name {name!r}")
         used.add(name)
         if v["shape"] == "box":
-            h = v["rmax"]
-            solids.append(f'<box name="{name}_s" lunit="mm" x="{2 * h:.9g}" y="{2 * h:.9g}" '
+            hx, hy = v["rmax"], v["rmax_y"]
+            solids.append(f'<box name="{name}_s" lunit="mm" x="{2 * hx:.9g}" y="{2 * hy:.9g}" '
                           f'z="{t:.9g}"/>')
-            extent = max(extent, h * 2 ** 0.5)
+            extent = max(extent, math.hypot(hx, hy))
         else:
             solids.append(f'<tube name="{name}_s" aunit="deg" lunit="mm" rmin="{v["rmin"]:.9g}" '
                           f'rmax="{v["rmax"]:.9g}" z="{t:.9g}" startphi="0" deltaphi="360"/>')

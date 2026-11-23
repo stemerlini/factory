@@ -152,6 +152,7 @@ materials:                                # G4_* NIST names need no entry
 layers:                                   # front to back along +z, front face at z = 0
   - {name: Kapton, material: G4_KAPTON, thickness_um: 50, half_mm: 10}   # square
   - {name: D1, material: G4_Si, thickness_um: 300, radius_mm: 5}         # disc
+  - {name: D3, material: G4_Si, thickness_um: 300, half_x_mm: 3.5, half_y_mm: 5.6}   # rectangle
   - {name: D2, material: G4_Si, thickness_um: 300, radius_mm: 5, gap_mm: 1}
 volumes:                                  # housing, collimators: tubes at absolute z
   - {name: Collimator, material: G4_W, rmin_mm: 5, rmax_mm: 15, z_mm: -10, length_mm: 8}
